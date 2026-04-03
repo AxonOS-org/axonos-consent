@@ -1,0 +1,29 @@
+[package]
+name = "axonos-consent"
+version = "0.1.0"
+edition = "2021"
+authors = ["Denis Yermakou <axonosorg@gmail.com>"]
+description = "MMP Consent Extension implementation for AxonOS — real-time consent primitive for BCI cognitive mesh coupling"
+license = "MIT"
+repository = "https://github.com/AxonOS-org/axonos-consent"
+keywords = ["bci", "consent", "mmp", "real-time", "no_std"]
+categories = ["embedded", "no-std", "science"]
+
+[features]
+default = ["cbor"]
+cbor = []
+json = ["dep:serde", "dep:serde_json"]
+std = ["serde?/std", "serde_json?/std"]
+stim-guard = []
+
+[dependencies]
+# CBOR: no_std compatible, zero-alloc
+minicbor = { version = "0.24", default-features = false, features = ["alloc"] }
+
+# JSON: only for relay boundary transcoding (std feature gate)
+serde = { version = "1.0", default-features = false, features = ["derive"], optional = true }
+serde_json = { version = "1.0", default-features = false, optional = true }
+
+[dev-dependencies]
+serde_json = "1.0"
+hex = "0.4"
