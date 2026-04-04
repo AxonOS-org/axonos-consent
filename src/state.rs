@@ -39,6 +39,8 @@ pub enum TransitionError {
     NotSuspended,
     /// Cannot suspend — already suspended (idempotent no-op, not an error in protocol).
     AlreadySuspended,
+    /// Peer not found in the consent engine peer table.
+    PeerNotFound,
 }
 
 impl ConsentState {

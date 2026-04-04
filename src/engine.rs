@@ -59,6 +59,10 @@ impl ConsentEngine {
 
     /// Register a new peer (on handshake). Starts in Granted state.
     pub fn register_peer(&mut self, peer_id: PeerId, now_us: u64) -> Result<(), &'static str> {
+        // Check for duplicate registration
+        if self.find_peer(&peer_id).is_some() {
+            return Err("peer already registered");
+        }
         for slot in self.peers.iter_mut() {
             if slot.is_none() {
                 *slot = Some(PeerConsent {
@@ -86,7 +90,7 @@ impl ConsentEngine {
         now_us: u64,
     ) -> Result<ConsentState, TransitionError> {
         let peer = self.find_peer_mut(peer_id)
-            .ok_or(TransitionError::NotSuspended)?;
+            .ok_or(TransitionError::PeerNotFound)?;
         let new_state = peer.state.suspend()?;
         peer.state = new_state;
         peer.last_reason = reason;
@@ -101,7 +105,7 @@ impl ConsentEngine {
         now_us: u64,
     ) -> Result<ConsentState, TransitionError> {
         let peer = self.find_peer_mut(peer_id)
-            .ok_or(TransitionError::NotSuspended)?;
+            .ok_or(TransitionError::PeerNotFound)?;
         let new_state = peer.state.resume()?;
         peer.state = new_state;
         peer.last_transition_us = now_us;
@@ -121,7 +125,7 @@ impl ConsentEngine {
         now_us: u64,
     ) -> Result<ConsentState, TransitionError> {
         let peer = self.find_peer_mut(peer_id)
-            .ok_or(TransitionError::AlreadyWithdrawn)?;
+            .ok_or(TransitionError::PeerNotFound)?;
 
         // Step 1: Set local consent state to WITHDRAWN
         let new_state = peer.state.withdraw()?;
