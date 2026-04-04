@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/AxonOS-org/axonos-consent/actions/workflows/ci.yml/badge.svg)](https://github.com/AxonOS-org/axonos-consent/actions/workflows/ci.yml)
 
-**MMP Consent Extension v0.1.0 — zero-alloc Rust implementation for real-time BCI.**
+**MMP Consent Extension v0.2.0 — zero-alloc Rust implementation for real-time BCI.**
 
 Spec: [sym.bot/spec/mmp-consent](https://sym.bot/spec/mmp-consent) · Base: [MMP v0.2.0](https://sym.bot/spec/mmp) · Ref impls: [sym](https://github.com/sym-bot/sym) (Node.js) · [sym-swift](https://github.com/sym-bot/sym-swift) (iOS)
 
