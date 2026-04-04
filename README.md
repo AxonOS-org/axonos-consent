@@ -1,4 +1,7 @@
 # axonos-consent
+![version](https://img.shields.io/badge/version-0.2.0-blue.svg)
+![no_std](https://img.shields.io/badge/no__std-compatible-success.svg)
+![license](https://img.shields.io/badge/license-MIT-green.svg)
 
 **MMP Consent Extension v0.2.0 — Rust implementation for AxonOS**
 
