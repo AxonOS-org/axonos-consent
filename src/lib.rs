@@ -1,29 +1,25 @@
 //! # axonos-consent
 //!
-//! Implementation of the MMP Consent Extension v0.1.0 for AxonOS.
+//! MMP Consent Extension v0.1.0 — Rust implementation for AxonOS.
+//! Spec: <https://sym.bot/spec/mmp-consent>
 //!
-//! Specification: <https://sym.bot/spec/mmp-consent>
-//! Base protocol: MMP v0.2.0 <https://sym.bot/spec/mmp>
+//! ## Zero-allocation guarantee
 //!
-//! ## Architecture
+//! The default build (`#![no_std]`, no features) is **fully allocation-free**.
+//! All frame types use fixed-size buffers. No `String`, no `Vec`, no heap.
 //!
-//! This crate implements the consent primitive at two levels:
+//! The `alloc` feature enables `String`-backed reason fields for relay
+//! boundary use. The `json` feature enables JSON codec (requires `alloc` + `std`).
 //!
-//! - **Protocol level**: ConsentState, ConsentEngine, frame codec (CBOR + JSON)
-//! - **Hardware level**: StimGuard integration for bidirectional BCI
-//!   (feature-gated behind `stim-guard`)
+//! ## Critical path (M4F → A53 IPC)
 //!
-//! ## Encoding Strategy
-//!
-//! - **Local IPC (M4F ↔ A53)**: CBOR — compact, no string parsing on critical path
-//! - **Relay boundary (A53 ↔ mesh peers)**: JSON — compatible with MMP reference
-//!   implementations (sym for Node.js, sym-swift for iOS/macOS)
-//!
-//! Frame types use string identifiers per MMP Section 7:
-//! `"consent-withdraw"`, `"consent-suspend"`, `"consent-resume"`
+//! `ConsentState` + `ConsentEngine` + `codec::cbor` — all zero-alloc.
+//! WCET target: <1µs for state transition + StimGuard lockout.
 
 #![cfg_attr(not(feature = "std"), no_std)]
+#![deny(unsafe_code)]
 
+#[cfg(feature = "alloc")]
 extern crate alloc;
 
 pub mod state;
@@ -31,11 +27,12 @@ pub mod engine;
 pub mod frames;
 pub mod reason;
 pub mod codec;
+pub mod validate;
 
 #[cfg(feature = "stim-guard")]
 pub mod stim_guard;
 
 pub use state::ConsentState;
 pub use engine::ConsentEngine;
-pub use frames::{ConsentWithdraw, ConsentSuspend, ConsentResume, ConsentFrame};
+pub use frames::{ConsentFrame, Scope};
 pub use reason::ReasonCode;

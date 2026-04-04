@@ -1,27 +1,24 @@
 [package]
 name = "axonos-consent"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 authors = ["Denis Yermakou <axonosorg@gmail.com>"]
-description = "MMP Consent Extension implementation for AxonOS — real-time consent primitive for BCI cognitive mesh coupling"
+description = "MMP Consent Extension v0.1.0 — real-time consent primitive for BCI mesh coupling. Zero-alloc critical path."
 license = "MIT"
 repository = "https://github.com/AxonOS-org/axonos-consent"
 keywords = ["bci", "consent", "mmp", "real-time", "no_std"]
-categories = ["embedded", "no-std", "science"]
+categories = ["embedded", "no-std"]
+readme = "README.md"
 
 [features]
-default = ["cbor"]
-cbor = []
-json = ["dep:serde", "dep:serde_json", "std"]
-std = ["serde?/std", "serde_json?/std"]
+default = []
+alloc = []                          # enables String/Vec in frame types (relay boundary, testing)
+json = ["alloc", "dep:serde_json"]  # JSON codec requires alloc + std
+std = ["json"]
 stim-guard = []
 
 [dependencies]
-# JSON: only for relay boundary transcoding (requires std)
-serde = { version = "1.0", default-features = false, features = ["derive"], optional = true }
-serde_json = { version = "1.0", default-features = false, optional = true }
+serde_json = { version = "1.0", optional = true }
 
 [dev-dependencies]
 serde_json = "1.0"
-serde = { version = "1.0", features = ["derive"] }
-hex = "0.4"
