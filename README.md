@@ -1,6 +1,6 @@
 # axonos-consent
 
-**MMP Consent Extension v0.1.0 — Rust implementation for AxonOS**
+**MMP Consent Extension v0.2.0 — Rust implementation for AxonOS**
 
 Implementation of the [MMP Consent Extension](https://sym.bot/spec/mmp-consent) for real-time brain-computer interface applications. Part of the [AxonOS](https://axonos.org) neural operating system.
 
