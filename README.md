@@ -6,6 +6,27 @@
 [![Safety](https://img.shields.io/badge/memory-zero--alloc-black?style=flat-square)](https://axonos.org)
 [![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-lightgrey?style=flat-square)](LICENSE)
 
+## Architecture
+
+- Layer 2 consent primitive (MMP)
+- Zero-allocation runtime (no_std)
+- Bounded CBOR decoder
+- Exhaustive state machine (3x3)
+- StimGuard integration (hardware enforcement)
+
+## Interop Status
+
+✔ Tested against SYM.BOT production relay  
+✔ 4 sessions, 0 errors  
+✔ Forward compatibility confirmed (MMP Section 7)
+
+## Design Guarantees
+
+- O(1) memory
+- Deterministic execution
+- No heap allocation
+- Bounded parsing
+- Audit-safe transitions
 **MMP Consent Extension v0.1.0 — reference implementation.**
 
 Zero-alloc. Bounded. Fuzz-tested. `#![forbid(unsafe_code)]`.
