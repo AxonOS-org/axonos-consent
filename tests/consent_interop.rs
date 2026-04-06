@@ -281,7 +281,7 @@ mod json_tests {
 #[test] fn eng_dup() { let mut e = ConsentEngine::new(); e.register_peer([2;16], 0).unwrap(); assert!(e.register_peer([2;16], 0).is_err()); }
 #[test] fn eng_full() { let mut e = ConsentEngine::new(); for i in 0..MAX_PEERS as u8 { let mut p=[0;16]; p[0]=i; e.register_peer(p,0).unwrap(); } assert!(e.register_peer([0xFF;16],0).is_err()); }
 #[test] fn eng_unknown() { let mut e = ConsentEngine::new(); assert_eq!(e.withdraw(&[0xFF;16], None, 0), Err(TransitionError::PeerNotFound)); }
-#[test] fn eng_withdraw_all() { let mut e = ConsentEngine::new(); for i in 0..3u8 { let mut p=[0;16]; p[0]=i; e.register_peer(p,0).unwrap(); } assert_eq!(e.withdraw_all(Some(ReasonCode::EmergencyButton), 100), 3); }
+#[test] fn eng_withdraw_all() { let mut e = ConsentEngine::new(); for i in 0..3u8 { let mut p=[0;16]; p[0]=i; e.register_peer(p,0).unwrap(); } let result = e.withdraw_all(Some(ReasonCode::EmergencyButton), 100); assert_eq!(result.count, 3); assert!(result.withdrawn_peers[0].is_some()); assert!(result.withdrawn_peers[1].is_some()); assert!(result.withdrawn_peers[2].is_some()); }
 
 // ═══════════════════════════════════════════════════════════════════
 //  APPLY_FRAME — EXHAUSTIVE STATE×FRAME TABLE

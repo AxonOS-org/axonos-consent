@@ -52,7 +52,7 @@ pub mod error;
 pub mod stim_guard;
 
 pub use state::ConsentState;
-pub use engine::ConsentEngine;
+pub use engine::{ConsentEngine, WithdrawAllResult};
 pub use frames::{ConsentFrame, Scope};
 pub use reason::ReasonCode;
 pub use error::Error;

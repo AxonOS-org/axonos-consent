@@ -42,6 +42,16 @@ pub struct ProcessResult {
     pub warning_count: u8,
 }
 
+/// Result of withdraw_all() with peer audit trail.
+/// Zero-alloc: fixed array, no heap. For WCET logging per §5.1.
+#[derive(Debug, Clone)]
+pub struct WithdrawAllResult {
+    /// Peer IDs that were withdrawn (ordered by withdrawal sequence).
+    pub withdrawn_peers: [Option<PeerId>; MAX_PEERS],
+    /// Number of peers actually withdrawn.
+    pub count: usize,
+}
+
 pub struct ConsentEngine {
     peers: [Option<PeerConsent>; MAX_PEERS],
     #[cfg(feature = "stim-guard")]
@@ -200,8 +210,18 @@ impl ConsentEngine {
         Ok(s)
     }
 
-    pub fn withdraw_all(&mut self, reason: Option<ReasonCode>, now_us: u64) -> usize {
-        let mut count = 0;
+    /// Withdraw consent from all peers. Emergency global kill-switch.
+    /// §8: physical button → direct interrupt → this function.
+    ///
+    /// Returns peer IDs for WCET audit trail (Article #39).
+    /// Zero-alloc: fixed array, no heap.
+    ///
+    /// WCET: O(MAX_PEERS) = O(8). <5µs on M4F.
+    pub fn withdraw_all(&mut self, reason: Option<ReasonCode>, now_us: u64) -> WithdrawAllResult {
+        let mut result = WithdrawAllResult {
+            withdrawn_peers: [None; MAX_PEERS],
+            count: 0,
+        };
         for slot in self.peers.iter_mut() {
             if let Some(peer) = slot {
                 if peer.state != ConsentState::Withdrawn {
@@ -209,11 +229,12 @@ impl ConsentEngine {
                     peer.last_reason = reason; peer.last_transition_us = now_us;
                     #[cfg(feature = "stim-guard")]
                     if let Some(cb) = self.on_withdraw { cb(&peer.peer_id); }
-                    count += 1;
+                    result.withdrawn_peers[result.count] = Some(peer.peer_id);
+                    result.count += 1;
                 }
             }
         }
-        count
+        result
     }
 
     /// §6.1: check if cognitive frames should be processed for this peer.
