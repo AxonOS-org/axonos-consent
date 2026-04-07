@@ -15,7 +15,7 @@
 //! | Encode | Operational | Buffer too small |
 
 use crate::codec::cbor::{DecodeError, EncodeError};
-use crate::invariants::{InvariantViolation, InvariantWarning};
+use crate::invariants::InvariantViolation;
 use crate::state::TransitionError;
 
 /// Top-level error enum. Every error path in the crate maps here.
