@@ -1,5 +1,7 @@
 # axonos-consent
 
+[![CI](https://github.com/AxonOS-org/axonos-consent/actions/workflows/ci.yml/badge.svg)](https://github.com/AxonOS-org/axonos-consent/actions)
+
 **MMP Consent Extension v0.1.0 — reference implementation.**
 
 Zero-alloc. Bounded. Fuzz-tested. `#![forbid(unsafe_code)]`.
