@@ -1,12 +1,16 @@
 # axonos-consent
 
-[![CI](https://github.com/AxonOS-org/axonos-consent/actions/workflows/ci.yml/badge.svg)](https://github.com/AxonOS-org/axonos-consent/actions)
+[![CI](https://github.com/AxonOS-org/axonos-consent/actions/workflows/CI.yml/badge.svg)](https://github.com/AxonOS-org/axonos-consent/actions)
+![Rust](https://img.shields.io/badge/rust-stable-brightgreen.svg?logo=rust&style=flat-square)
+![MMP](https://img.shields.io/badge/MMP-1st_External_Impl-gold?style=flat-square)
+![Hardware](https://img.shields.io/badge/target-Cortex--M4F-blue?style=flat-square)
 
-**MMP Consent Extension v0.1.0 — reference implementation.**
+> "The first external implementation of MMP — built independently in zero-allocation Rust on Cortex-M4F, with sub-microsecond StimGuard enforcement."  
+> — Hongwei Xu, Founder of SYM.BOT & Author of MMP
 
 Zero-alloc. Bounded. Fuzz-tested. `#![forbid(unsafe_code)]`.
 
-Spec: [sym.bot/spec/mmp-consent](https://sym.bot/spec/mmp-consent) · Version: `1`
+Spec: [sym.bot/spec/mmp-consent](https://sym.bot/spec/mmp-consent) · 
 
 ---
 
