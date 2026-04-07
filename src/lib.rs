@@ -7,7 +7,7 @@
 //!
 //! ## Single entry point
 //!
-//! ```ignore
+//! ```rust
 //! let result = engine.process_raw(peer_id, cbor_bytes, now_us)?;
 //! ```
 //!
