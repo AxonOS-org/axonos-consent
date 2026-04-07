@@ -192,19 +192,6 @@ bit 6 (0x40) = "timestamp_us"  AxonOS extension
 
 ---
 
-## Testing
-
-```bash
-cargo test                  # no_std: CBOR, state machine, engine, invariants, process_raw
-cargo test --features json  # + JSON round-trip against 15 interop vectors
-cargo +nightly fuzz run fuzz_cbor_decode     # crash resistance
-cargo +nightly fuzz run fuzz_cbor_roundtrip  # encode→decode invariant
-```
-
-60+ tests: 7 CBOR round-trips, 5 security rejections, 2 buffer overflow, 6 invariants, 9 exhaustive state table, 4 process_raw pipeline, 4 process_frame, 15 JSON vectors, 5 state machine, 5 engine, 3 error taxonomy.
-
----
-
 ## Licence
 
 MIT
