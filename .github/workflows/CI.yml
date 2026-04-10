@@ -1,18 +1,105 @@
-name: CI
+name: AxonOS Core CI (v0.2.2)
 
 on:
   push:
-    branches: [ "main", "master" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main", "master" ]
+    branches: ["main"]
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
 
 jobs:
-  test:
-    name: Build and Test
+  audit_and_style:
+    name: 1. Format & Strict Analysis
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install Rust
+      - uses: Swatinem/rust-cache@v2
+      - name: Install toolchain
         uses: dtolnay/rust-toolchain@stable
-      - name: Run tests
-        run: cargo test --verbose
+        with:
+          components: rustfmt, clippy
+      - name: Enforce Style & Logic
+        run: |
+          cargo fmt --all -- --check
+          cargo clippy --all-targets --all-features --locked -- -D warnings
+
+  build_embedded:
+    name: 2. Bare-Metal Validation (no_std)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - name: Install Cortex-M4 target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: thumbv7em-none-eabihf
+      - name: Verify Embedded Compilation
+        run: |
+          cargo check --target thumbv7em-none-eabihf --no-default-features --locked
+          cargo build --release --target thumbv7em-none-eabihf --no-default-features --locked
+
+  test_suite:
+    name: 3. Protocol & Interop Verification
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - name: Install toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Verify Interop Vectors Integrity (SHA-256)
+        run: |
+          EXPECTED="29a8bf9f2b4dabe5d9641a8a4c416f361c2ba9815cca9b8e9e1d222d002fa50a"
+          FILE="tests/vectors/consent-interop-vectors-v0.1.0.json"
+          if [ ! -f "$FILE" ]; then
+            echo "Error: Interop vectors file missing!"
+            exit 1
+          fi
+          ACTUAL=$(sha256sum "$FILE" | cut -d ' ' -f1)
+          if [ "$ACTUAL" != "$EXPECTED" ]; then
+            echo "CRITICAL: Interop vectors checksum mismatch!"
+            echo "Expected: $EXPECTED"
+            echo "Actual:   $ACTUAL"
+            exit 1
+          fi
+
+      - name: Fast Compile Check
+        run: cargo check --all-targets --all-features --locked
+
+      - name: Execution Suite (Fail-Fast)
+        run: |
+          cargo test --locked
+          cargo test --features json --locked
+          cargo test --no-default-features --locked
+          cargo test --doc --locked
+
+  security_scan:
+    name: 4. Security Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - name: Run Cargo Audit
+        run: |
+          cargo install cargo-audit --locked || true
+          cargo audit
+
+  fuzz_smoke:
+    name: 5. Fuzzing Sanity (Nightly)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - name: Install Nightly
+        uses: dtolnay/rust-toolchain@nightly
+      - name: Run Fuzz Target (Timeboxed)
+        run: |
+          cargo install cargo-fuzz --locked || true
+          if [ -d "fuzz" ] && [ -f "fuzz/Cargo.toml" ]; then
+            cargo +nightly fuzz run fuzz_cbor_decode -- -max_total_time=20
+          else
+            echo "Fuzzing not configured, skipping smoke test."
+          fi
