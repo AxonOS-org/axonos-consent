@@ -1,202 +1,208 @@
 # axonos-consent
 
-[![CI](https://github.com/AxonOS-org/axonos-consent/actions/workflows/CI.yml/badge.svg)](https://github.com/AxonOS-org/axonos-consent/actions)
-![Rust](https://img.shields.io/badge/rust-stable-brightgreen.svg?logo=rust&style=flat-square)
-![MMP](https://img.shields.io/badge/MMP-1st_External_Impl-gold?style=flat-square)
-![Hardware](https://img.shields.io/badge/target-Cortex--M4F-blue?style=flat-square)
+![version](https://img.shields.io/badge/version-0.2.2-blue)
+![MMP](https://img.shields.io/badge/MMP-v0.2.2-purple)
+![consent](https://img.shields.io/badge/consent--ext-v0.1.0-green)
+![no\_std](https://img.shields.io/badge/no__std-✓-brightgreen)
+![unsafe](https://img.shields.io/badge/unsafe-forbidden-red)
+![alloc](https://img.shields.io/badge/alloc-zero-orange)
+![interop](https://img.shields.io/badge/interop-15%2F15-success)
+![tests](https://img.shields.io/badge/tests-60%2B-blue)
+![fuzz](https://img.shields.io/badge/fuzz-✓-yellow)
 
-> "The first external implementation of MMP — built independently in zero-allocation Rust on Cortex-M4F, with sub-microsecond StimGuard enforcement."  
-> — Hongwei Xu, Founder of SYM.BOT & Author of MMP
+**Deterministic consent enforcement layer for brain-computer interfaces.**
 
-## 🛡️ Engineering Excellence & Safety
+Reference implementation of the [MMP Consent Extension v0.1.0](https://sym.bot/spec/mmp-consent), co-designed with [Hongwei Xu](https://github.com/sym-bot) ([SYM.BOT](https://sym.bot)). Aligned with [Mesh Memory Protocol v0.2.2](https://sym.bot/spec/mmp), Section 16.4.
 
-The axonos-consent core is designed for deterministic execution in safety-critical environments, with strict enforcement of protocol invariants and zero-allocation constraints.
+> *"The consent primitive was designed together — your BCI domain constraints shaped the spec."*
+> — Hongwei Xu, Founder of SYM.BOT
 
-### Verification Status
-Last run: 51 passed, 0 failed, 0 regressions
+---
 
-| Category | Status | Key Property |
-| :--- | :--- | :--- |
-| State Machine | Exhaustive | Terminal WITHDRAWN state (non-reversible) |
-| Security Layer | Hardened | Protection against malformed CBOR, duplicate keys, oversized maps |
-| Embedded Safety | no_std | Zero-allocation, panic-free execution path |
-| Interoperability | Proven | Independent implementation validated against SYM.BOT MMP (wire-level alignment, first pass) |
+## Interoperability
 
-### Determinism Guarantees
-- RFC 2119 requirements enforced as runtime invariants (MUST → hard constraints)
-- Bounded decoding (no unbounded memory growth)
-- Caller-supplied monotonic clock (now_us) for full platform control
+Two independent implementations — Rust `#![no_std]` ([axonos-consent](https://github.com/AxonOS-org/axonos-consent)) and Node.js ([sym](https://github.com/sym-bot/sym)) — produce identical state transitions for all canonical test vectors.
 
-### Local Verification
-Reproduce validation and state transition checks:
+**15/15 canonical interop vectors — PASS**
 
-cargo test --tests
+Validated against [SYM.BOT](https://sym.bot) production mesh (5 active nodes, April 2026). Four consent frames (`withdraw`, `suspend`, `resume`, `STIMGUARD_LOCKOUT`) forwarded by relay, silently ignored by all production nodes per MMP §7 forward compatibility. Zero errors across 122 lines of WebSocket log.
 
+### Integrity lock
 
-Spec: [sym.bot/spec/mmp-consent](https://sym.bot/spec/mmp-consent)  
+```
+SHA-256: 29a8bf9f2b4dabe5d9641a8a4c416f361c2ba9815cca9b8e9e1d222d002fa50a
+```
+Any modification to `tests/vectors/consent-interop-vectors-v0.1.0.json` invalidates the test suite.
 
 ---
 
 ## API
 
 ```rust
-// Single entry point: wire bytes → validated state transition
 let result = engine.process_raw(&peer_id, cbor_bytes, now_us)?;
-// result.new_state: ConsentState
-// result.warnings: SHOULD-level advisories
 ```
 
-`process_raw()` is the **only** function external code calls. It executes:
+Single entry point. Executes the full pipeline:
 
-```text
-CBOR decode (bounded) → invariant check (MUST/SHOULD) → state transition (exhaustive) → StimGuard
 ```
-
-No other function combination is needed or recommended.
+process_raw → CBOR decode (bounded) → invariant check (MUST/SHOULD) → state transition (3×3) → StimGuard
+```
 
 ---
 
-## Guarantees
+## State machine
 
-| Property | Guarantee | Evidence |
-|----------|-----------|---------|
-| No heap allocation | Critical path is `#![no_std]`, no `alloc` | `ReasonBuf` (64B fixed), encoder writes to `&mut [u8]` |
-| Bounded parsing | All inputs bounded | `MAX_MAP_FIELDS=8`, `MAX_STRING_LEN=128`, `MAX_NESTING=4` |
-| Deterministic execution | No loops beyond field count | O(n), n≤8 fields. No recursion in decode path |
-| No unsafe code | `#![forbid(unsafe_code)]` | Compile-time enforced |
-| Exhaustive state machine | All 9 cells explicit | `apply_frame()`: 3 states × 3 frames, zero wildcards |
-| Silent error impossible | `#[must_use]` on `Error` and transitions | Compile warning if Result ignored |
-| Forward compatible | Unknown CBOR keys skipped | `skip_value()` with same bounds |
-
----
-
-## State machine (§4)
+![states](https://img.shields.io/badge/GRANTED-●-brightgreen) ![states](https://img.shields.io/badge/SUSPENDED-●-yellow) ![states](https://img.shields.io/badge/WITHDRAWN-●-red)
 
 ```text
  ┌─────────┐  consent-suspend   ┌───────────┐
- │ GRANTED │ ─────────────────> │ SUSPENDED │
- │         │ <───────────────── │           │
+ │ GRANTED │ ─────────────────→ │ SUSPENDED │
+ │         │ ←───────────────── │           │
  └────┬────┘  consent-resume    └─────┬─────┘
       │                               │
       │  consent-withdraw             │  consent-withdraw
-      v                               v
+      ▼                               ▼
  ┌──────────────────────────────────────┐
  │          WITHDRAWN (terminal)         │
  └──────────────────────────────────────┘
 ```
 
-### Transition table (exhaustive, no wildcards)
-
-| Current \ Frame | Withdraw | Suspend | Resume |
-|-----------------|----------|---------|--------|
+| | Withdraw | Suspend | Resume |
+|---|---|---|---|
 | **GRANTED** | → WITHDRAWN | → SUSPENDED | → GRANTED *(idempotent)* |
 | **SUSPENDED** | → WITHDRAWN | → SUSPENDED *(idempotent)* | → GRANTED |
-| **WITHDRAWN** | **REJECT** | **REJECT** | **REJECT** |
+| **WITHDRAWN** | ![reject](https://img.shields.io/badge/-REJECT-red) | ![reject](https://img.shields.io/badge/-REJECT-red) | ![reject](https://img.shields.io/badge/-REJECT-red) |
 
-**Formal closure:** `apply_frame()` matches on `(ConsentState, ConsentFrame)` exhaustively. Adding a new state or frame variant produces a compile error, not a runtime bug.
+`apply_frame()`: exhaustive 3×3 match, zero wildcards. New variant → compile error.
+
+---
+
+## Guarantees
+
+| Property | Guarantee |
+|---|---|
+| ![no_std](https://img.shields.io/badge/no__std-✓-brightgreen) | Default build, no heap |
+| ![zero-alloc](https://img.shields.io/badge/zero--alloc-✓-brightgreen) | `ReasonBuf` 64B fixed, encoder writes to `&mut [u8]` |
+| ![bounded](https://img.shields.io/badge/bounded-✓-brightgreen) | `MAX_MAP=8` `MAX_STR=128` `MAX_DEPTH=4` |
+| ![forbid](https://img.shields.io/badge/unsafe-forbidden-red) | `#![forbid(unsafe_code)]` — compile-time |
+| ![fsm](https://img.shields.io/badge/FSM-exhaustive-blue) | 3×3 table, compiler-checked |
+| ![must_use](https://img.shields.io/badge/must__use-✓-orange) | `#[must_use]` on `Error` and transitions |
+| ![terminal](https://img.shields.io/badge/WITHDRAWN-terminal-red) | Any frame after WITHDRAWN → REJECT |
+| ![layer2](https://img.shields.io/badge/Layer_2-consent-purple) | Below coupling (Layer 4), below SVAF |
 
 ---
 
 ## Threat model
 
-| Threat | Vector | Mitigation | Bound |
-|--------|--------|------------|-------|
-| Map bomb | CBOR map(10⁶) | `MAX_MAP_FIELDS` | 8 |
-| String bomb | text(1MB) | `MAX_STRING_LEN` | 128 B |
-| Stack overflow | Nested maps | `MAX_NESTING_DEPTH` | 4 |
-| Type confusion | `{"type":"withdraw","type":"resume"}` | Bitmask dedup | 7 keys |
-| Unsupported CBOR | Neg int, tag, float | Explicit reject | Types 1,2,4,6,7 |
-| Buffer overflow | Large encode | `Result<_, BufferTooSmall>` | 256 B max |
-| State violation | WITHDRAWN → RESUME | `apply_frame()` reject | Compile-checked |
-| Silent error | Unchecked Result | `#[must_use]` | Compile warning |
-
----
-
-## Complexity
-
-```text
-process_raw():
-  decode:     O(n), n ≤ MAX_MAP_FIELDS = 8
-              Per field: 1 key read + 1 value read = O(1)
-              skip_value: bounded by MAX_NESTING × MAX_MAP_FIELDS
-  invariants: O(1) — fixed field checks, no loops
-  transition: O(1) — single exhaustive match
-
-Total: O(n), n ≤ 8. Worst-case: 16 CBOR reads + 7 invariant checks + 1 match.
-WCET target: <10µs on Cortex-M4F @ 168 MHz.
-
-encode(): O(k), k = present fields ≤ 7. Zero allocation.
-StimGuard path: <1µs (state write + DAC register write, non-preemptible).
-```
-
----
+| Threat | Mitigation | Bound |
+|---|---|---|
+| Map bomb | `MAX_MAP_FIELDS` | 8 |
+| String bomb | `MAX_STRING_LEN` | 128 B |
+| Stack overflow | `MAX_NESTING_DEPTH` | 4 |
+| Type confusion | Bitmask duplicate key detection | 7 keys |
+| Unsupported CBOR | Explicit reject: types 1,2,4,6,7 | — |
+| Buffer overflow | `Err(BufferTooSmall)` | 256 B |
+| State violation | `apply_frame()` reject | Compiler |
 
 ## Error taxonomy
 
 ```text
 L1 (Wire)    → Error::Decode     — malformed CBOR, bounds, unsupported types
-L2 (Struct)  → Error::Invariant  — MUST violations (zero timestamp, reason too long)
+L2 (Struct)  → Error::Invariant  — MUST violations (§10)
 L3 (State)   → Error::Transition — WITHDRAWN→any, peer not found
 L4 (System)  → Error::Encode     — buffer too small
 ```
 
-All error types: `Copy`, `#[must_use]`, `From` conversions to unified `Error`.
-
 ---
 
-## Security bounds
+## MMP v0.2.2 alignment
 
-| Constant | Value | Purpose |
-|----------|-------|---------|
-| `MAX_MAP_FIELDS` | 8 | Map bomb protection |
-| `MAX_STRING_LEN` | 128 | String bomb protection |
-| `MAX_NESTING_DEPTH` | 4 | Stack protection |
-| `MAX_REASON_LEN` | 64 | ReasonBuf capacity |
-| `MAX_ENCODED_SIZE` | 256 | Encoder ceiling |
-| `MAX_PEERS` | 8 | Engine peer table |
-| `CONSENT_PROTOCOL_VERSION` | 1 | Wire versioning |
+| MMP § | Reference |
+|---|---|
+| §3.5 | `consent-withdraw` triggers CONNECTED → DISCONNECTED |
+| §7 | Forward compat: unknown types silently ignored |
+| §7.2 | Error code `2002 CONSENT_WITHDRAWN` |
+| §16 | Extension mechanism: `consent-v0.1.0` in handshake |
+| §16.4 | Published extension: [sym.bot/spec/mmp-consent](https://sym.bot/spec/mmp-consent) |
 
----
-
-## Spec-to-code mapping
+## Consent spec mapping
 
 | § | Module | Enforcement |
-|---|--------|-------------|
-| §3 | `frames` | Type-safe enum (Withdraw/Suspend/Resume) |
-| §3.1 | `frames::ConsentWithdraw` | `scope`: non-optional |
-| §3.1 | `invariants` | `timestamp`: SHOULD warning if absent |
-| §3.4 | `reason` | `ReasonCode` enum, 0x00–0x0F spec / 0x10–0xFF impl |
-| §4 | `state::apply_frame` | Exhaustive 3×3 table, WITHDRAWN terminal |
-| §5.1 | `engine::process_raw` | Full pipeline: decode→validate→transition→StimGuard |
-| §6.1 | `engine::allows_cognitive_frames` | `false` for SUSPENDED/WITHDRAWN |
-| §6.4 | `state::to_gossip_bits` | 2-bit: 00/01/10 |
-| §7 | `codec::cbor` | Bounded decoder, string-keyed map |
-| §8 | `stim_guard` | DacGate trait, <1µs path, atomicity guaranteed |
-| §10 | `invariants` | MUST → violation, SHOULD → warning |
+|---|---|---|
+| §3 | `frames` | Type-safe enum |
+| §3.1 | `ConsentWithdraw` | `scope` non-optional |
+| §3.4 | `reason` | 0x00–0x0F spec / 0x10–0xFF impl |
+| §4 | `state::apply_frame` | Exhaustive 3×3 |
+| §5.1 | `engine::process_raw` | Single entry point |
+| §6.1 | `allows_cognitive_frames` | `false` for SUSPENDED/WITHDRAWN |
+| §8 | `stim_guard` | DacGate, <1µs |
+| §10 | `invariants` | MUST→violation, SHOULD→warning |
 
 ---
 
-## Duplicate key detection
+## Reason codes
 
-Bitmask (documented in `decode()`):
+| Code | Name | Range |
+|---|---|---|
+| `0x00` | UNSPECIFIED | spec |
+| `0x01` | USER_INITIATED | spec |
+| `0x02` | SAFETY_VIOLATION | spec |
+| `0x03` | HARDWARE_FAULT | spec |
+| `0x10` | **STIMGUARD_LOCKOUT** | AxonOS |
+| `0x11` | SESSION_ATTESTATION_FAILURE | AxonOS |
+| `0x12` | EMERGENCY_BUTTON | AxonOS |
+| `0x13` | SWARM_FAULT_DETECTED | AxonOS |
 
-```text
-bit 0 (0x01) = "type"          §3
-bit 1 (0x02) = "scope"         §3.1
-bit 2 (0x04) = "reasonCode"    §3.4
-bit 3 (0x08) = "reason"        §3.1
-bit 4 (0x10) = "epoch"         §3.1
-bit 5 (0x20) = "timestamp"     §3.1
-bit 6 (0x40) = "timestamp_us"  AxonOS extension
+---
+
+## Crate structure
+
+```
+src/
+├── lib.rs           # crate root, version, spec mapping
+├── state.rs         # ConsentState + apply_frame (exhaustive 3×3)
+├── engine.rs        # ConsentEngine, process_raw, process_frame
+├── frames.rs        # Frame types, ReasonBuf (zero-alloc)
+├── reason.rs        # ReasonCode registry (§3.4)
+├── invariants.rs    # MUST/SHOULD/MAY (§10), check_transition
+├── error.rs         # Layered error taxonomy (L1–L4)
+├── stim_guard.rs    # DacGate trait, timing contract
+└── codec/
+    ├── cbor.rs      # Bounded encoder/decoder, security hardened
+    └── json.rs      # JSON codec (feature-gated: alloc+std)
+tests/
+├── consent_interop.rs    # 60+ tests
+└── vectors/              # 15 canonical interop vectors
+fuzz/
+└── fuzz_targets/         # cargo-fuzz: decode + roundtrip
+```
+
+---
+
+## Testing
+
+```bash
+cargo test                  # no_std: CBOR, state machine, engine, invariants
+cargo test --features json  # + JSON round-trip (15 vectors)
+cargo +nightly fuzz run fuzz_cbor_decode
+cargo +nightly fuzz run fuzz_cbor_roundtrip
 ```
 
 ---
 
 ## Licence
 
-MIT
+Licensed under either of
+
+- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
+- MIT License ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
+
+at your option.
 
 ---
 
-[axonos.org](https://axonos.org) · [medium.com/@AxonOS](https://medium.com/@AxonOS) · axonosorg@gmail.com
-[sym.bot/spec/mmp](https://sym.bot/spec/mmp) · [github.com/sym-bot](https://github.com/sym-bot)
+## Links
+
+**AxonOS:** [axonos.org](https://axonos.org) · [medium.com/@AxonOS](https://medium.com/@AxonOS) · axonosorg@gmail.com
+
+**SYM.BOT:** [sym.bot](https://sym.bot) · [sym.bot/spec/mmp](https://sym.bot/spec/mmp) · [sym.bot/spec/mmp-consent](https://sym.bot/spec/mmp-consent) · [github.com/sym-bot](https://github.com/sym-bot)
