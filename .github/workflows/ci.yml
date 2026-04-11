@@ -19,8 +19,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: true
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo test
 
@@ -29,8 +27,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: true
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo test --features json
 
@@ -45,7 +41,6 @@ jobs:
       - run: cargo build --target thumbv7em-none-eabihf --no-default-features
 
   clippy:
-    if: false # Временно отключено
     name: Clippy
     runs-on: ubuntu-latest
     steps:
@@ -57,7 +52,7 @@ jobs:
       - run: cargo clippy --all-targets --features json -- -D warnings
 
   fmt:
-    if: false # Временно отключено
+    if: false 
     name: Format
     runs-on: ubuntu-latest
     steps:
