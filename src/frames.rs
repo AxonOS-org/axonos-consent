@@ -34,7 +34,7 @@ impl ReasonBuf {
     }
 
     /// Create from a string slice. Truncates if longer than MAX_REASON_LEN.
-    pub fn from_str(s: &str) -> Self {
+    pub fn new(s: &str) -> Self {
         let bytes = s.as_bytes();
         let copy_len = if bytes.len() > MAX_REASON_LEN { MAX_REASON_LEN } else { bytes.len() };
         let mut buf = [0u8; MAX_REASON_LEN];
@@ -72,7 +72,7 @@ impl Scope {
     pub fn as_str(&self) -> &'static str {
         match self { Scope::Peer => "peer", Scope::All => "all" }
     }
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse(s: &str) -> Option<Self> {
         match s { "peer" => Some(Scope::Peer), "all" => Some(Scope::All), _ => None }
     }
 }

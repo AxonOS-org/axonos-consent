@@ -43,7 +43,7 @@ use crate::reason::ReasonCode;
 //  SECURITY LIMITS
 // ═══════════════════════════════════════════════════════════════════
 
-pub const MAX_MAP_FIELDS: u64 = 8;   // §3: max 7 fields + margin
+pub const MAX_MAP_FIELDS: u64 = 8; // §3: max 7 fields + margin
 pub const MAX_STRING_LEN: usize = 128;
 const MAX_NESTING: u8 = 4;
 
@@ -60,9 +60,9 @@ pub enum DecodeError {
     UnsupportedMajorType(u8),
     ExpectedMap,
     ExpectedText,
-    MissingTypeField,       // §3: "type" MUST be present
+    MissingTypeField, // §3: "type" MUST be present
     UnknownFrameType,
-    MissingScopeField,      // §3.1: scope MUST be present for withdraw
+    MissingScopeField, // §3.1: scope MUST be present for withdraw
     UnknownScope,
     MapTooLarge,
     StringTooLong,
@@ -89,12 +89,18 @@ pub fn encode(frame: &ConsentFrame, out: &mut [u8]) -> Result<usize, EncodeError
     match frame {
         ConsentFrame::Withdraw(f) => {
             // §3.1: consent-withdraw frame
-            let n = 2 + f.reason_code.is_some() as u64 + f.reason.is_some() as u64
-                + f.epoch.is_some() as u64 + f.timestamp_ms.is_some() as u64
+            let n = 2
+                + f.reason_code.is_some() as u64
+                + f.reason.is_some() as u64
+                + f.epoch.is_some() as u64
+                + f.timestamp_ms.is_some() as u64
                 + f.timestamp_us.is_some() as u64;
-            w.map(n)?; w.text("type")?; w.text("consent-withdraw")?;
-            w.text("scope")?; w.text(f.scope.as_str())?;           // §3.1: MUST
-            // §3.4
+            w.map(n)?;
+            w.text("type")?;
+            w.text("consent-withdraw")?;
+            w.text("scope")?;
+            w.text(f.scope.as_str())?; // §3.1: MUST
+                                       // §3.4
             if let Some(rc) = f.reason_code {
                 w.text("reasonCode")?;
                 w.uint(rc.to_u8() as u64)?;
@@ -103,29 +109,60 @@ pub fn encode(frame: &ConsentFrame, out: &mut [u8]) -> Result<usize, EncodeError
                 w.text("reason")?;
                 w.text(r.as_str())?;
             }
-            if let Some(e) = f.epoch { w.text("epoch")?; w.uint(e)?; }
-            if let Some(t) = f.timestamp_ms { w.text("timestamp")?; w.uint(t)?; }
-            if let Some(t) = f.timestamp_us { w.text("timestamp_us")?; w.uint(t)?; }
+            if let Some(e) = f.epoch {
+                w.text("epoch")?;
+                w.uint(e)?;
+            }
+            if let Some(t) = f.timestamp_ms {
+                w.text("timestamp")?;
+                w.uint(t)?;
+            }
+            if let Some(t) = f.timestamp_us {
+                w.text("timestamp_us")?;
+                w.uint(t)?;
+            }
         }
         ConsentFrame::Suspend(f) => {
             // §3.2: consent-suspend frame
-            let n = 1 + f.reason_code.is_some() as u64 + f.reason.is_some() as u64
-                + f.timestamp_ms.is_some() as u64 + f.timestamp_us.is_some() as u64;
-            w.map(n)?; w.text("type")?; w.text("consent-suspend")?;
-            if let Some(rc) = f.reason_code { w.text("reasonCode")?; w.uint(rc.to_u8() as u64)?; }
+            let n = 1
+                + f.reason_code.is_some() as u64
+                + f.reason.is_some() as u64
+                + f.timestamp_ms.is_some() as u64
+                + f.timestamp_us.is_some() as u64;
+            w.map(n)?;
+            w.text("type")?;
+            w.text("consent-suspend")?;
+            if let Some(rc) = f.reason_code {
+                w.text("reasonCode")?;
+                w.uint(rc.to_u8() as u64)?;
+            }
             if let Some(r) = &f.reason {
                 w.text("reason")?;
                 w.text(r.as_str())?;
             }
-            if let Some(t) = f.timestamp_ms { w.text("timestamp")?; w.uint(t)?; }
-            if let Some(t) = f.timestamp_us { w.text("timestamp_us")?; w.uint(t)?; }
+            if let Some(t) = f.timestamp_ms {
+                w.text("timestamp")?;
+                w.uint(t)?;
+            }
+            if let Some(t) = f.timestamp_us {
+                w.text("timestamp_us")?;
+                w.uint(t)?;
+            }
         }
         ConsentFrame::Resume(f) => {
             // §3.3: consent-resume frame
             let n = 1 + f.timestamp_ms.is_some() as u64 + f.timestamp_us.is_some() as u64;
-            w.map(n)?; w.text("type")?; w.text("consent-resume")?;
-            if let Some(t) = f.timestamp_ms { w.text("timestamp")?; w.uint(t)?; }
-            if let Some(t) = f.timestamp_us { w.text("timestamp_us")?; w.uint(t)?; }
+            w.map(n)?;
+            w.text("type")?;
+            w.text("consent-resume")?;
+            if let Some(t) = f.timestamp_ms {
+                w.text("timestamp")?;
+                w.uint(t)?;
+            }
+            if let Some(t) = f.timestamp_us {
+                w.text("timestamp_us")?;
+                w.uint(t)?;
+            }
         }
     }
     Ok(w.pos)
@@ -152,7 +189,9 @@ pub fn decode(data: &[u8]) -> Result<ConsentFrame, DecodeError> {
     let mut c = Cursor { data, pos: 0 };
 
     let map_len = c.read_map_len()?;
-    if map_len > MAX_MAP_FIELDS { return Err(DecodeError::MapTooLarge); }
+    if map_len > MAX_MAP_FIELDS {
+        return Err(DecodeError::MapTooLarge);
+    }
 
     // Duplicate key bitmask (see docstring above)
     let mut seen: u8 = 0;
@@ -171,7 +210,10 @@ pub fn decode(data: &[u8]) -> Result<ConsentFrame, DecodeError> {
         // bit 0 = type
         match key {
             "type" => {
-                if seen & 0x01 != 0 { return Err(DecodeError::DuplicateKey); } seen |= 0x01;
+                if seen & 0x01 != 0 {
+                    return Err(DecodeError::DuplicateKey);
+                }
+                seen |= 0x01;
                 frame_type = Some(match c.read_text_bounded()? {
                     "consent-withdraw" => FrameType::Withdraw,
                     "consent-suspend" => FrameType::Suspend,
@@ -181,37 +223,57 @@ pub fn decode(data: &[u8]) -> Result<ConsentFrame, DecodeError> {
             }
             // bit 1 = scope
             "scope" => {
-                if seen & 0x02 != 0 { return Err(DecodeError::DuplicateKey); } seen |= 0x02;
+                if seen & 0x02 != 0 {
+                    return Err(DecodeError::DuplicateKey);
+                }
+                seen |= 0x02;
                 let s = c.read_text_bounded()?;
-                scope = Some(Scope::from_str(s).ok_or(DecodeError::UnknownScope)?);
+                scope = Some(Scope::parse(s).ok_or(DecodeError::UnknownScope)?);
             }
             // bit 2 = reasonCode
             "reasonCode" => {
-                if seen & 0x04 != 0 { return Err(DecodeError::DuplicateKey); } seen |= 0x04;
+                if seen & 0x04 != 0 {
+                    return Err(DecodeError::DuplicateKey);
+                }
+                seen |= 0x04;
                 reason_code = Some(ReasonCode::from_u8(c.read_uint()? as u8));
             }
             // bit 3 = reason
             "reason" => {
-                if seen & 0x08 != 0 { return Err(DecodeError::DuplicateKey); } seen |= 0x08;
-                reason = Some(ReasonBuf::from_str(c.read_text_bounded()?));
+                if seen & 0x08 != 0 {
+                    return Err(DecodeError::DuplicateKey);
+                }
+                seen |= 0x08;
+                reason = Some(ReasonBuf::new(c.read_text_bounded()?));
             }
             // bit 4 = epoch
             "epoch" => {
-                if seen & 0x10 != 0 { return Err(DecodeError::DuplicateKey); } seen |= 0x10;
+                if seen & 0x10 != 0 {
+                    return Err(DecodeError::DuplicateKey);
+                }
+                seen |= 0x10;
                 epoch = Some(c.read_uint()?);
             }
             // bit 5 = timestamp
             "timestamp" => {
-                if seen & 0x20 != 0 { return Err(DecodeError::DuplicateKey); } seen |= 0x20;
+                if seen & 0x20 != 0 {
+                    return Err(DecodeError::DuplicateKey);
+                }
+                seen |= 0x20;
                 timestamp_ms = Some(c.read_uint()?);
             }
             // bit 6 = timestamp_us
             "timestamp_us" => {
-                if seen & 0x40 != 0 { return Err(DecodeError::DuplicateKey); } seen |= 0x40;
+                if seen & 0x40 != 0 {
+                    return Err(DecodeError::DuplicateKey);
+                }
+                seen |= 0x40;
                 timestamp_us = Some(c.read_uint()?);
             }
             // §7: unknown keys skipped (forward-compat)
-            _ => { c.skip_value(0)?; }
+            _ => {
+                c.skip_value(0)?;
+            }
         }
     }
 
@@ -221,36 +283,59 @@ pub fn decode(data: &[u8]) -> Result<ConsentFrame, DecodeError> {
         FrameType::Withdraw => {
             let s = scope.ok_or(DecodeError::MissingScopeField)?; // §3.1: MUST
             Ok(ConsentFrame::Withdraw(ConsentWithdraw {
-                scope: s, reason_code, reason, epoch, timestamp_ms, timestamp_us,
+                scope: s,
+                reason_code,
+                reason,
+                epoch,
+                timestamp_ms,
+                timestamp_us,
             }))
         }
         FrameType::Suspend => Ok(ConsentFrame::Suspend(ConsentSuspend {
-            reason_code, reason, timestamp_ms, timestamp_us,
+            reason_code,
+            reason,
+            timestamp_ms,
+            timestamp_us,
         })),
         FrameType::Resume => Ok(ConsentFrame::Resume(ConsentResume {
-            timestamp_ms, timestamp_us,
+            timestamp_ms,
+            timestamp_us,
         })),
     }
 }
 
 #[derive(Clone, Copy)]
-enum FrameType { Withdraw, Suspend, Resume }
+enum FrameType {
+    Withdraw,
+    Suspend,
+    Resume,
+}
 
 // ═══════════════════════════════════════════════════════════════════
 //  CBOR PRIMITIVES — with explicit major type rejection
 // ═══════════════════════════════════════════════════════════════════
 
-struct Writer<'a> { buf: &'a mut [u8], pos: usize }
+struct Writer<'a> {
+    buf: &'a mut [u8],
+    pos: usize,
+}
 
 impl<'a> Writer<'a> {
     fn put(&mut self, b: u8) -> Result<(), EncodeError> {
-        if self.pos >= self.buf.len() { return Err(EncodeError::BufferTooSmall); }
-        self.buf[self.pos] = b; self.pos += 1; Ok(())
+        if self.pos >= self.buf.len() {
+            return Err(EncodeError::BufferTooSmall);
+        }
+        self.buf[self.pos] = b;
+        self.pos += 1;
+        Ok(())
     }
     fn put_slice(&mut self, s: &[u8]) -> Result<(), EncodeError> {
-        if self.pos + s.len() > self.buf.len() { return Err(EncodeError::BufferTooSmall); }
+        if self.pos + s.len() > self.buf.len() {
+            return Err(EncodeError::BufferTooSmall);
+        }
         self.buf[self.pos..self.pos + s.len()].copy_from_slice(s);
-        self.pos += s.len(); Ok(())
+        self.pos += s.len();
+        Ok(())
     }
     fn type_val(&mut self, major: u8, v: u64) -> Result<(), EncodeError> {
         let mt = major << 5;
@@ -260,15 +345,22 @@ impl<'a> Writer<'a> {
         else if v <= 0xFFFF_FFFF { self.put(mt | 26)?; self.put_slice(&(v as u32).to_be_bytes()) }
         else { self.put(mt | 27)?; self.put_slice(&v.to_be_bytes()) }
     }
-    fn map(&mut self, n: u64) -> Result<(), EncodeError> { self.type_val(5, n) }
+    fn map(&mut self, n: u64) -> Result<(), EncodeError> {
+        self.type_val(5, n)
+    }
     fn text(&mut self, s: &str) -> Result<(), EncodeError> {
         self.type_val(3, s.len() as u64)?;
         self.put_slice(s.as_bytes())
     }
-    fn uint(&mut self, v: u64) -> Result<(), EncodeError> { self.type_val(0, v) }
+    fn uint(&mut self, v: u64) -> Result<(), EncodeError> {
+        self.type_val(0, v)
+    }
 }
 
-struct Cursor<'a> { data: &'a [u8], pos: usize }
+struct Cursor<'a> {
+    data: &'a [u8],
+    pos: usize,
+}
 
 impl<'a> Cursor<'a> {
     fn byte(&mut self) -> Result<u8, DecodeError> {
@@ -278,8 +370,12 @@ impl<'a> Cursor<'a> {
         Ok(b)
     }
     fn advance(&mut self, n: usize) -> Result<&'a [u8], DecodeError> {
-        if self.pos + n > self.data.len() { return Err(DecodeError::UnexpectedEof); }
-        let s = &self.data[self.pos..self.pos + n]; self.pos += n; Ok(s)
+        if self.pos + n > self.data.len() {
+            return Err(DecodeError::UnexpectedEof);
+        }
+        let s = &self.data[self.pos..self.pos + n];
+        self.pos += n;
+        Ok(s)
     }
     fn argument(&mut self, ai: u8) -> Result<u64, DecodeError> {
         match ai {
@@ -304,41 +400,58 @@ impl<'a> Cursor<'a> {
     fn read_uint(&mut self) -> Result<u64, DecodeError> {
         let ib = self.byte()?;
         let major = ib >> 5;
-        if major != 0 { return Err(DecodeError::UnsupportedMajorType(major)); }
+        if major != 0 {
+            return Err(DecodeError::UnsupportedMajorType(major));
+        }
         self.argument(ib & 0x1F)
     }
 
     fn read_text_bounded(&mut self) -> Result<&'a str, DecodeError> {
         let ib = self.byte()?;
         let major = ib >> 5;
-        if major != 3 { return Err(DecodeError::ExpectedText); }
+        if major != 3 {
+            return Err(DecodeError::ExpectedText);
+        }
         let len = self.argument(ib & 0x1F)? as usize;
-        if len > MAX_STRING_LEN { return Err(DecodeError::StringTooLong); }
+        if len > MAX_STRING_LEN {
+            return Err(DecodeError::StringTooLong);
+        }
         core::str::from_utf8(self.advance(len)?).map_err(|_| DecodeError::InvalidCbor)
     }
 
     fn read_map_len(&mut self) -> Result<u64, DecodeError> {
         let ib = self.byte()?;
         let major = ib >> 5;
-        if major != 5 { return Err(DecodeError::ExpectedMap); }
+        if major != 5 {
+            return Err(DecodeError::ExpectedMap);
+        }
         self.argument(ib & 0x1F)
     }
 
     /// Skip one CBOR value. **Explicitly rejects unsupported major types.**
     fn skip_value(&mut self, depth: u8) -> Result<(), DecodeError> {
-        if depth > MAX_NESTING { return Err(DecodeError::NestingTooDeep); }
+        if depth > MAX_NESTING {
+            return Err(DecodeError::NestingTooDeep);
+        }
         let ib = self.byte()?;
         let major = ib >> 5;
         let arg = self.argument(ib & 0x1F)?;
         match major {
             0 => {} // unsigned int — consumed
             3 => { // text string
-                if arg as usize > MAX_STRING_LEN { return Err(DecodeError::StringTooLong); }
+                if arg as usize > MAX_STRING_LEN {
+                    return Err(DecodeError::StringTooLong);
+                }
                 self.advance(arg as usize)?;
             }
             5 => { // map
-                if arg > MAX_MAP_FIELDS { return Err(DecodeError::MapTooLarge); }
-                for _ in 0..arg { self.skip_value(depth+1)?; self.skip_value(depth+1)?; }
+                if arg > MAX_MAP_FIELDS {
+                    return Err(DecodeError::MapTooLarge);
+                }
+                for _ in 0..arg {
+                    self.skip_value(depth + 1)?;
+                    self.skip_value(depth + 1)?;
+                }
             }
             // Explicitly reject all unsupported types
             1 => return Err(DecodeError::UnsupportedMajorType(1)), // negative int
