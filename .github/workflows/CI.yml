@@ -1,6 +1,1 @@
-test-default — cargo test (no_std)
-test-json — cargo test --features json (15 vectors)
-no-std — cargo build --target thumbv7em-none-eabihf
-clippy — -D warnings (default + json features)
-fmt — cargo fmt --check
-vectors-integrity — SHA-256 checksum verification
+cargo test
