@@ -47,16 +47,24 @@ pub fn encode_value(frame: &ConsentFrame) -> serde_json::Value {
         ConsentFrame::Withdraw(f) => {
             m.insert("type".into(), "consent-withdraw".into());
             m.insert("scope".into(), f.scope.as_str().into());
-            if let Some(rc) = f.reason_code { m.insert("reasonCode".into(), (rc.to_u8() as u64).into()); }
-            if let Some(ref r) = f.reason { m.insert("reason".into(), r.as_str().into()); }
+            if let Some(rc) = f.reason_code {
+                m.insert("reasonCode".into(), (rc.to_u8() as u64).into());
+            }
+            if let Some(r) = &f.reason {
+                m.insert("reason".into(), r.as_str().into());
+            }
             if let Some(e) = f.epoch { m.insert("epoch".into(), e.into()); }
             if let Some(t) = f.timestamp_ms { m.insert("timestamp".into(), t.into()); }
             if let Some(t) = f.timestamp_us { m.insert("timestamp_us".into(), t.into()); }
         }
         ConsentFrame::Suspend(f) => {
             m.insert("type".into(), "consent-suspend".into());
-            if let Some(rc) = f.reason_code { m.insert("reasonCode".into(), (rc.to_u8() as u64).into()); }
-            if let Some(ref r) = f.reason { m.insert("reason".into(), r.as_str().into()); }
+            if let Some(rc) = f.reason_code {
+                m.insert("reasonCode".into(), (rc.to_u8() as u64).into());
+            }
+            if let Some(r) = &f.reason {
+                m.insert("reason".into(), r.as_str().into());
+            }
             if let Some(t) = f.timestamp_ms { m.insert("timestamp".into(), t.into()); }
             if let Some(t) = f.timestamp_us { m.insert("timestamp_us".into(), t.into()); }
         }
