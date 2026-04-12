@@ -55,19 +55,19 @@ extern crate alloc;
 /// Protocol version. Wire-encoded in future handshake extensions.
 pub const CONSENT_PROTOCOL_VERSION: u8 = 1;
 
-pub mod state;
-pub mod engine;
-pub mod frames;
-pub mod reason;
 pub mod codec;
-pub mod invariants;
+pub mod engine;
 pub mod error;
+pub mod frames;
+pub mod invariants;
+pub mod reason;
+pub mod state;
 
 #[cfg(feature = "stim-guard")]
 pub mod stim_guard;
 
-pub use state::ConsentState;
 pub use engine::ConsentEngine;
+pub use error::Error;
 pub use frames::{ConsentFrame, Scope};
 pub use reason::ReasonCode;
-pub use error::Error;
+pub use state::ConsentState;

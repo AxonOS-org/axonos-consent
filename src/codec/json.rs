@@ -14,17 +14,29 @@ use crate::reason::ReasonCode;
 #[cfg(feature = "json")]
 pub fn decode_value(v: &serde_json::Value) -> Result<ConsentFrame, &'static str> {
     let obj = v.as_object().ok_or("expected JSON object")?;
-    let ft = obj.get("type").and_then(|v| v.as_str()).ok_or("missing type")?;
-    let rc = obj.get("reasonCode").and_then(|v| v.as_u64()).map(|v| ReasonCode::from_u8(v as u8));
-    let reason = obj.get("reason").and_then(|v| v.as_str()).map(ReasonBuf::new);
+    let ft = obj
+        .get("type")
+        .and_then(|v| v.as_str())
+        .ok_or("missing type")?;
+    let rc = obj
+        .get("reasonCode")
+        .and_then(|v| v.as_u64())
+        .map(|v| ReasonCode::from_u8(v as u8));
+    let reason = obj
+        .get("reason")
+        .and_then(|v| v.as_str())
+        .map(ReasonBuf::new);
     let ts_ms = obj.get("timestamp").and_then(|v| v.as_u64());
     let ts_us = obj.get("timestamp_us").and_then(|v| v.as_u64());
 
     match ft {
         "consent-withdraw" => {
             let scope = Scope::parse(
-                obj.get("scope").and_then(|v| v.as_str()).ok_or("missing scope")?
-            ).ok_or("unknown scope")?;
+                obj.get("scope")
+                    .and_then(|v| v.as_str())
+                    .ok_or("missing scope")?,
+            )
+            .ok_or("unknown scope")?;
             let epoch = obj.get("epoch").and_then(|v| v.as_u64());
             Ok(ConsentFrame::Withdraw(ConsentWithdraw {
                 scope,
@@ -42,7 +54,8 @@ pub fn decode_value(v: &serde_json::Value) -> Result<ConsentFrame, &'static str>
             timestamp_us: ts_us,
         })),
         "consent-resume" => Ok(ConsentFrame::Resume(ConsentResume {
-            timestamp_ms: ts_ms, timestamp_us: ts_us,
+            timestamp_ms: ts_ms,
+            timestamp_us: ts_us,
         })),
         _ => Err("unknown frame type"),
     }
