@@ -52,7 +52,7 @@ jobs:
       - run: cargo clippy --all-targets --features json -- -D warnings
 
   fmt:
-    if: false 
+     
     name: Format
     runs-on: ubuntu-latest
     steps:
