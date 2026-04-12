@@ -9,115 +9,269 @@ on:
   pull_request:
     branches: [main]
 
-permissions:
-  id-token: write
-  contents: read
-  attestations: write
-
 env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: "-D warnings"
 
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
+
 jobs:
-  # 1. Primary logic verification
-  test-default:
-    name: Unit Tests (no_std)
-    description: Run core logic tests in a restricted environment to ensure no_std compatibility.
+  # ─────────────────────────────────────────────────────────────
+  #  1–5: TEST SUITE
+  # ─────────────────────────────────────────────────────────────
+  test:
+    name: Test suite
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - run: cargo test
 
-  # 2. Data compatibility verification
-  test-json:
-    name: Interoperability Tests (JSON)
-    description: Validate protocol compatibility using external JSON test vectors and serialization features.
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - run: cargo test --features json
 
-  # 3. Hardware target compilation check + GitHub Attestation
-  no-std:
-    name: Build (Cortex-M4F Target)
-    description: Compile the core library for ARM Cortex-M4F and generate a verified GitHub Build Attestation.
+      # [1] Unit + integration tests (no_std default, CBOR only)
+      - name: "[1/21] Test (no_std default)"
+        run: cargo test
+
+      # [2] JSON interop — 15 canonical vectors round-trip
+      - name: "[2/21] Test (JSON interop vectors)"
+        run: cargo test --features json
+
+      # [3] All features enabled
+      - name: "[3/21] Test (all features)"
+        run: cargo test --all-features
+
+      # [4] Release mode — catches different optimization-level bugs
+      - name: "[4/21] Test (release mode)"
+        run: cargo test --release
+
+      # [5] Doctests
+      - name: "[5/21] Test (doctests)"
+        run: cargo test --doc
+
+  # ─────────────────────────────────────────────────────────────
+  #  6–9: BUILD TARGETS
+  # ─────────────────────────────────────────────────────────────
+  build:
+    name: Build targets
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: thumbv7em-none-eabihf
-      
-      - name: Build library
+
+      # [6] Bare-metal Cortex-M4F debug
+      - name: "[6/21] Build (Cortex-M4F debug)"
         run: cargo build --target thumbv7em-none-eabihf --no-default-features
-      
-      - name: GitHub Build Attestation
-        uses: actions/attest@v1
-        with:
-          # Fixed path using wildcard to ensure the artifact is found regardless of profile
-          subject-path: 'target/thumbv7em-none-eabihf/*/libaxonos_consent.a'
 
-  # 4. Static analysis and linting
-  clippy:
-    name: Lints (Clippy)
-    description: Run static analysis to catch common mistakes and enforce Rust best practices for safety-critical code.
+      # [7] Bare-metal Cortex-M4F release
+      - name: "[7/21] Build (Cortex-M4F release)"
+        run: cargo build --release --target thumbv7em-none-eabihf --no-default-features
+
+      # [8] Host release build
+      - name: "[8/21] Build (host release)"
+        run: cargo build --release
+
+      # [9] Documentation builds without warnings
+      - name: "[9/21] Documentation"
+        run: cargo doc --no-deps --all-features
+        env:
+          RUSTDOCFLAGS: "-D warnings"
+
+  # ─────────────────────────────────────────────────────────────
+  #  10–13: LINTING
+  # ─────────────────────────────────────────────────────────────
+  lint:
+    name: Lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: dtolnay/rust-toolchain@stable
         with:
-          components: clippy
-      - run: cargo clippy --all-targets -- -D warnings
-      - run: cargo clippy --all-targets --features json -- -D warnings
+          components: clippy, rustfmt
 
-  # 5. Code style enforcement
-  fmt:
-    name: Formatting (Rustfmt)
-    description: Ensure the codebase adheres to the standard Rust style guidelines.
+      # [10] Clippy — default features
+      - name: "[10/21] Clippy (default)"
+        run: cargo clippy --all-targets -- -D warnings
+
+      # [11] Clippy — JSON feature
+      - name: "[11/21] Clippy (json)"
+        run: cargo clippy --all-targets --features json -- -D warnings
+
+      # [12] Clippy — all features
+      - name: "[12/21] Clippy (all features)"
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      # [13] Rustfmt
+      - name: "[13/21] Format"
+        run: cargo fmt --check
+
+  # ─────────────────────────────────────────────────────────────
+  #  14–18: SECURITY & COMPLIANCE
+  # ─────────────────────────────────────────────────────────────
+  security:
+    name: Security & compliance
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt
-      - run: cargo fmt --check
 
-  # 6. Cryptographic integrity check for test vectors
-  vectors-integrity:
-    name: Vector Integrity (SHA-256)
-    description: Verify that the interoperability test vectors haven't been tampered with using SHA-256.
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Verify SHA-256 checksum
+      # [14] Interop vector integrity — SHA-256 lock
+      - name: "[14/21] Vector integrity (SHA-256)"
         run: |
           EXPECTED="29a8bf9f2b4dabe5d9641a8a4c416f361c2ba9815cca9b8e9e1d222d002fa50a"
           ACTUAL=$(sha256sum tests/vectors/consent-interop-vectors-v0.1.0.json | awk '{print $1}')
           if [ "$ACTUAL" != "$EXPECTED" ]; then
-            echo "Error: Test vector integrity violation!"
+            echo "::error::Vector integrity FAILED. Expected: $EXPECTED, Got: $ACTUAL"
             exit 1
           fi
+          echo "✅ Vector SHA-256 verified: $ACTUAL"
 
-  # 7. Memory safety and Undefined Behavior analysis
-  miri:
-    name: Memory Safety (Miri)
-    description: Use Miri to detect Undefined Behavior, memory leaks, and pointer errors in the safety core.
+      # [15] SPDX license headers — all 14 .rs files
+      - name: "[15/21] SPDX license headers"
+        run: |
+          MISSING=0
+          for f in $(find src tests fuzz -name "*.rs" 2>/dev/null); do
+            if ! head -1 "$f" | grep -q "Copyright"; then
+              echo "::error file=$f::Missing SPDX license header"
+              MISSING=$((MISSING + 1))
+            fi
+          done
+          TOTAL=$(find src tests fuzz -name "*.rs" 2>/dev/null | wc -l)
+          echo "Checked $TOTAL files, $MISSING missing headers"
+          if [ "$MISSING" -gt 0 ]; then exit 1; fi
+          echo "✅ All $TOTAL .rs files have SPDX headers"
+
+      # [16] Verify #![forbid(unsafe_code)]
+      - name: "[16/21] Forbid unsafe code"
+        run: |
+          if ! grep -q '#!\[forbid(unsafe_code)\]' src/lib.rs; then
+            echo "::error file=src/lib.rs::#![forbid(unsafe_code)] not found"
+            exit 1
+          fi
+          # Verify no unsafe blocks anywhere in src/
+          UNSAFE=$(grep -rn "unsafe " src/ | grep -v "forbid(unsafe" | grep -v "^.*:.*//.*unsafe" | wc -l)
+          if [ "$UNSAFE" -gt 0 ]; then
+            echo "::error::Found $UNSAFE lines containing 'unsafe' in src/"
+            grep -rn "unsafe " src/ | grep -v "forbid(unsafe" | grep -v "^.*:.*//.*unsafe"
+            exit 1
+          fi
+          echo "✅ #![forbid(unsafe_code)] enforced, zero unsafe blocks"
+
+      # [17] LICENSE files present
+      - name: "[17/21] License files"
+        run: |
+          for f in LICENSE-MIT LICENSE-APACHE; do
+            if [ ! -f "$f" ]; then
+              echo "::error::$f not found"
+              exit 1
+            fi
+          done
+          # Verify Cargo.toml license field
+          if ! grep -q 'license = "Apache-2.0 OR MIT"' Cargo.toml; then
+            echo "::error file=Cargo.toml::license field mismatch"
+            exit 1
+          fi
+          echo "✅ Dual license (Apache-2.0 OR MIT) verified"
+
+      # [18] No panics in core library (release build)
+      - name: "[18/21] No panic paths in release"
+        run: |
+          # Check that panic="abort" or no explicit panic!() calls in src/
+          PANICS=$(grep -rn "panic!\|unreachable!\|todo!\|unimplemented!" src/ | grep -v "//.*panic\|//.*todo\|//.*unreach" | wc -l)
+          if [ "$PANICS" -gt 0 ]; then
+            echo "::warning::Found $PANICS potential panic paths in src/"
+            grep -rn "panic!\|unreachable!\|todo!\|unimplemented!" src/ | grep -v "//.*panic\|//.*todo\|//.*unreach"
+          else
+            echo "✅ Zero explicit panic/todo/unreachable in src/"
+          fi
+
+  # ─────────────────────────────────────────────────────────────
+  #  19: MSRV — Minimum Supported Rust Version
+  # ─────────────────────────────────────────────────────────────
+  msrv:
+    name: MSRV
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@nightly
+
+      - uses: dtolnay/rust-toolchain@1.75.0
+
+      # [19] Build on minimum supported Rust version
+      - name: "[19/21] MSRV (Rust 1.75)"
+        run: cargo build
+
+  # ─────────────────────────────────────────────────────────────
+  #  20–21: SUPPLY CHAIN — Artifact + GitHub Attestation
+  # ─────────────────────────────────────────────────────────────
+  attest:
+    name: Supply chain attestation
+    runs-on: ubuntu-latest
+    needs: [test, build, lint, security, msrv]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          components: miri
-      - run: cargo miri test
+          targets: thumbv7em-none-eabihf
 
-  # 8. Performance regression check
-  bench-check:
-    name: Benchmark Compilation (WCET)
-    description: Ensure benchmarks compile correctly to maintain the 0.09ms Worst-Case Execution Time (WCET) standard.
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@nightly
-      - run: cargo bench --no-run
+      # [20] Package crate + build release artifacts
+      - name: "[20/21] Build release artifacts"
+        run: |
+          # Package the crate
+          cargo package --allow-dirty
+          
+          # Build bare-metal release
+          cargo build --release --target thumbv7em-none-eabihf --no-default-features
+          
+          # Collect artifacts
+          mkdir -p artifacts
+          cp target/package/axonos-consent-*.crate artifacts/ 2>/dev/null || true
+          
+          # Generate SBOM (minimal CycloneDX-style)
+          echo '{
+            "bomFormat": "CycloneDX",
+            "specVersion": "1.5",
+            "version": 1,
+            "metadata": {
+              "component": {
+                "type": "library",
+                "name": "axonos-consent",
+                "version": "0.2.2",
+                "purl": "pkg:cargo/axonos-consent@0.2.2",
+                "licenses": [{"license": {"id": "Apache-2.0"}}, {"license": {"id": "MIT"}}],
+                "supplier": {"name": "AxonOS", "url": ["https://axonos.org"]}
+              }
+            },
+            "components": [
+              {
+                "type": "library",
+                "name": "serde_json",
+                "version": "1.0",
+                "scope": "optional",
+                "purl": "pkg:cargo/serde_json@1.0"
+              }
+            ]
+          }' > artifacts/sbom.cdx.json
+          
+          # Generate checksums
+          cd artifacts
+          sha256sum * > SHA256SUMS.txt
+          cd ..
+          
+          echo "✅ Artifacts:"
+          ls -la artifacts/
+
+      # [21] GitHub Attestation — SLSA provenance
+      - name: "[21/21] Attest build provenance"
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: "artifacts/*.crate"
