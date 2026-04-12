@@ -22,6 +22,7 @@ jobs:
   # 1. Primary logic verification
   test-default:
     name: Unit Tests (no_std)
+    description: Run core logic tests in a restricted environment to ensure no_std compatibility.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -31,6 +32,7 @@ jobs:
   # 2. Data compatibility verification
   test-json:
     name: Interoperability Tests (JSON)
+    description: Validate protocol compatibility using external JSON test vectors and serialization features.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -40,6 +42,7 @@ jobs:
   # 3. Hardware target compilation check + GitHub Attestation
   no-std:
     name: Build (Cortex-M4F Target)
+    description: Compile the core library for ARM Cortex-M4F and generate a verified GitHub Build Attestation.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -53,11 +56,13 @@ jobs:
       - name: GitHub Build Attestation
         uses: actions/attest@v1
         with:
-          subject-path: 'target/thumbv7em-none-eabihf/debug/libaxonos_consent.a'
+          # Fixed path using wildcard to ensure the artifact is found regardless of profile
+          subject-path: 'target/thumbv7em-none-eabihf/*/libaxonos_consent.a'
 
   # 4. Static analysis and linting
   clippy:
     name: Lints (Clippy)
+    description: Run static analysis to catch common mistakes and enforce Rust best practices for safety-critical code.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -70,6 +75,7 @@ jobs:
   # 5. Code style enforcement
   fmt:
     name: Formatting (Rustfmt)
+    description: Ensure the codebase adheres to the standard Rust style guidelines.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -81,6 +87,7 @@ jobs:
   # 6. Cryptographic integrity check for test vectors
   vectors-integrity:
     name: Vector Integrity (SHA-256)
+    description: Verify that the interoperability test vectors haven't been tampered with using SHA-256.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -96,6 +103,7 @@ jobs:
   # 7. Memory safety and Undefined Behavior analysis
   miri:
     name: Memory Safety (Miri)
+    description: Use Miri to detect Undefined Behavior, memory leaks, and pointer errors in the safety core.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -107,9 +115,9 @@ jobs:
   # 8. Performance regression check
   bench-check:
     name: Benchmark Compilation (WCET)
+    description: Ensure benchmarks compile correctly to maintain the 0.09ms Worst-Case Execution Time (WCET) standard.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
       - run: cargo bench --no-run
-      
