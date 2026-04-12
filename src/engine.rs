@@ -176,7 +176,9 @@ impl ConsentEngine {
         // Step 4: StimGuard callback on withdrawal
         if new_state == ConsentState::Withdrawn {
             #[cfg(feature = "stim-guard")]
-            if let Some(cb) = self.on_withdraw { cb(peer_id); }
+            if let Some(cb) = self.on_withdraw {
+                cb(peer_id);
+            }
         }
 
         Ok(ProcessResult {
@@ -222,7 +224,9 @@ impl ConsentEngine {
         peer.last_reason = reason;
         peer.last_transition_us = now_us;
         #[cfg(feature = "stim-guard")]
-        if let Some(cb) = self.on_withdraw { cb(peer_id); }
+        if let Some(cb) = self.on_withdraw {
+            cb(peer_id);
+        }
         Ok(s)
     }
 
@@ -240,7 +244,9 @@ impl ConsentEngine {
                     result.withdrawn_peers[result.count] = Some(peer.peer_id);
                 }
                 #[cfg(feature = "stim-guard")]
-                if let Some(cb) = self.on_withdraw { cb(&peer.peer_id); }
+                if let Some(cb) = self.on_withdraw {
+                    cb(&peer.peer_id);
+                }
                 result.count += 1;
             }
         }

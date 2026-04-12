@@ -7,7 +7,6 @@
 //! Integration tests: round-trip, security bounds, invariants, engine.
 //! Run: cargo test --features json
 
-use axonos_consent::*;
 use axonos_consent::codec::cbor;
 use axonos_consent::frames::*;
 use axonos_consent::reason::ReasonCode;
@@ -30,25 +29,35 @@ fn rt(f: &ConsentFrame) {
 fn rt_withdraw_peer() { rt(&ConsentFrame::Withdraw(ConsentWithdraw {
     scope: Scope::Peer, reason_code: Some(ReasonCode::UserInitiated),
     reason: Some(ReasonBuf::new("disconnect")),
-    epoch: None, timestamp_ms: Some(1711540800000), timestamp_us: None,
+    epoch: None,
+    timestamp_ms: Some(1711540800000),
+    timestamp_us: None,
 })); }
 
 #[test]
 fn rt_withdraw_all() { rt(&ConsentFrame::Withdraw(ConsentWithdraw {
     scope: Scope::All, reason_code: Some(ReasonCode::SafetyViolation),
-    reason: None, epoch: Some(48291), timestamp_ms: None, timestamp_us: Some(1711540800000000),
+    reason: None,
+    epoch: Some(48291),
+    timestamp_ms: None,
+    timestamp_us: Some(1711540800000000),
 })); }
 
 #[test]
 fn rt_withdraw_stimguard() { rt(&ConsentFrame::Withdraw(ConsentWithdraw {
     scope: Scope::Peer, reason_code: Some(ReasonCode::StimGuardLockout),
     reason: Some(ReasonBuf::new("charge violation")),
-    epoch: None, timestamp_ms: None, timestamp_us: Some(1711540800123456),
+    epoch: None,
+    timestamp_ms: None,
+    timestamp_us: Some(1711540800123456),
 })); }
 
 #[test]
 fn rt_suspend_min() { rt(&ConsentFrame::Suspend(ConsentSuspend {
-    reason_code: None, reason: None, timestamp_ms: None, timestamp_us: None,
+    reason_code: None,
+    reason: None,
+    timestamp_ms: None,
+    timestamp_us: None,
 })); }
 
 #[test]
@@ -58,15 +67,21 @@ fn rt_resume() { rt(&ConsentFrame::Resume(ConsentResume {
 
 #[test]
 fn rt_both_ts() { rt(&ConsentFrame::Withdraw(ConsentWithdraw {
-    scope: Scope::Peer, reason_code: Some(ReasonCode::UserInitiated), reason: None,
-    epoch: None, timestamp_ms: Some(1000), timestamp_us: Some(1000000),
+    scope: Scope::Peer,
+    reason_code: Some(ReasonCode::UserInitiated),
+    reason: None,
+    epoch: None,
+    timestamp_ms: Some(1000),
+    timestamp_us: Some(1000000),
 })); }
 
 #[test]
 fn rt_emergency() { rt(&ConsentFrame::Withdraw(ConsentWithdraw {
     scope: Scope::All, reason_code: Some(ReasonCode::EmergencyButton),
     reason: Some(ReasonBuf::new("physical button")),
-    epoch: None, timestamp_ms: None, timestamp_us: Some(1),
+    epoch: None,
+    timestamp_ms: None,
+    timestamp_us: Some(1),
 })); }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -138,7 +153,9 @@ fn enc_buffer_too_small() {
     let f = ConsentFrame::Withdraw(ConsentWithdraw {
         scope: Scope::Peer, reason_code: Some(ReasonCode::UserInitiated),
         reason: Some(ReasonBuf::new("test")),
-        epoch: None, timestamp_ms: Some(1000), timestamp_us: None,
+        epoch: None,
+        timestamp_ms: Some(1000),
+        timestamp_us: None,
     });
     let mut tiny = [0u8; 4]; // way too small
     assert_eq!(cbor::encode(&f, &mut tiny), Err(cbor::EncodeError::BufferTooSmall));
@@ -162,7 +179,10 @@ fn enc_exact_fit() {
 fn inv_valid_withdraw() {
     let f = ConsentFrame::Withdraw(ConsentWithdraw {
         scope: Scope::Peer, reason_code: Some(ReasonCode::UserInitiated),
-        reason: None, epoch: None, timestamp_ms: Some(1000), timestamp_us: None,
+        reason: None,
+        epoch: None,
+        timestamp_ms: Some(1000),
+        timestamp_us: None,
     });
     let r = invariants::check_frame(&f);
     assert!(r.is_valid());
@@ -210,8 +230,12 @@ fn inv_transition_withdrawn_blocked() {
 #[test]
 fn inv_transition_granted_withdraw_ok() {
     let f = ConsentFrame::Withdraw(ConsentWithdraw {
-        scope: Scope::Peer, reason_code: None, reason: None,
-        epoch: None, timestamp_ms: None, timestamp_us: None,
+        scope: Scope::Peer,
+        reason_code: None,
+        reason: None,
+        epoch: None,
+        timestamp_ms: None,
+        timestamp_us: None,
     });
     assert_eq!(
         invariants::check_transition(ConsentState::Granted, &f),
@@ -222,7 +246,10 @@ fn inv_transition_granted_withdraw_ok() {
 #[test]
 fn inv_suspend_missing_reason_warns() {
     let f = ConsentFrame::Suspend(ConsentSuspend {
-        reason_code: None, reason: None, timestamp_ms: None, timestamp_us: None,
+        reason_code: None,
+    reason: None,
+    timestamp_ms: None,
+    timestamp_us: None,
     });
     let r = invariants::check_frame(&f);
     assert!(r.is_valid());
@@ -259,7 +286,9 @@ mod json_tests {
             assert_eq!(frame, d2, "{}: JSON rt", id);
             // Invariants
             let inv = invariants::check_frame(&frame);
-            if !inv.is_valid() { eprintln!("  WARN {}: invariant violation", id); }
+            if !inv.is_valid() {
+                eprintln!("  WARN {}: invariant violation", id);
+            }
             eprintln!("  PASS {} ({}B)", id, n);
             ok += 1;
         }
@@ -375,7 +404,11 @@ fn eng_unknown() {
 #[test]
 fn eng_withdraw_all() {
     let mut e = ConsentEngine::new();
-    for i in 0..3u8 { let mut p=[0; 16]; p[0]=i; e.register_peer(p,0).unwrap(); }
+    for i in 0..3u8 {
+        let mut p = [0; 16];
+        p[0] = i;
+        e.register_peer(p, 0).unwrap();
+    }
     let r = e.withdraw_all(Some(ReasonCode::EmergencyButton), 100);
     assert_eq!(r.count, 3);
     // Verify peer IDs are captured for audit trail
