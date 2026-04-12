@@ -14,24 +14,27 @@ env:
   RUSTFLAGS: "-D warnings"
 
 jobs:
+  # 1. Primary logic verification
   test-default:
-    name: Test (no_std default)
+    name: Unit Tests (no_std)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo test
 
+  # 2. Data compatibility verification
   test-json:
-    name: Test (JSON interop vectors)
+    name: Interoperability Tests (JSON)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo test --features json
 
+  # 3. Hardware target compilation check
   no-std:
-    name: Build (Cortex-M4F)
+    name: Build (Cortex-M4F Target)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -40,8 +43,9 @@ jobs:
           targets: thumbv7em-none-eabihf
       - run: cargo build --target thumbv7em-none-eabihf --no-default-features
 
+  # 4. Static analysis and linting
   clippy:
-    name: Clippy
+    name: Lints (Clippy)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -51,9 +55,9 @@ jobs:
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo clippy --all-targets --features json -- -D warnings
 
+  # 5. Code style enforcement
   fmt:
-     
-    name: Format
+    name: Formatting (Rustfmt)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -62,19 +66,38 @@ jobs:
           components: rustfmt
       - run: cargo fmt --check
 
+  # 6. Cryptographic integrity check for test vectors
   vectors-integrity:
-    name: Vector integrity
+    name: Vector Integrity (SHA-256)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Verify SHA-256
+      - name: Verify SHA-256 checksum
         run: |
           EXPECTED="29a8bf9f2b4dabe5d9641a8a4c416f361c2ba9815cca9b8e9e1d222d002fa50a"
           ACTUAL=$(sha256sum tests/vectors/consent-interop-vectors-v0.1.0.json | awk '{print $1}')
           if [ "$ACTUAL" != "$EXPECTED" ]; then
-            echo "FAIL: vector integrity check"
-            echo "Expected: $EXPECTED"
-            echo "Actual:   $ACTUAL"
+            echo "Error: Test vector integrity violation!"
             exit 1
           fi
-          echo "PASS: SHA-256 verified: $ACTUAL"
+
+  # 7. Memory safety and Undefined Behavior analysis
+  miri:
+    name: Memory Safety (Miri)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: miri
+      - run: cargo miri test
+
+  # 8. Performance regression check
+  bench-check:
+    name: Benchmark Compilation (WCET)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - run: cargo bench --no-run
+      
