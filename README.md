@@ -13,14 +13,36 @@
 [![license](https://img.shields.io/badge/license-Apache--2.0%20OR%20MIT-blue)](#licence)
 [![CI](https://github.com/AxonOS-org/axonos-consent/actions/workflows/ci.yml/badge.svg)](https://github.com/AxonOS-org/axonos-consent/actions/workflows/ci.yml)
 
-**Deterministic consent enforcement layer for safety-critical brain-computer interfaces.**
+**The reference hard real-time execution environment for the MMP Consent Extension.**
 
-Reference implementation of the [MMP Consent Extension v0.1.0](https://sym.bot/spec/mmp-consent), co-designed with [Hongwei Xu](https://github.com/sym-bot) ([SYM.BOT](https://sym.bot)). Aligned with [Mesh Memory Protocol v0.2.2](https://sym.bot/spec/mmp), Section 16.4.
+Deterministic consent enforcement for safety-critical brain-computer interfaces. `#![no_std]` Rust, bare-metal Cortex-M, zero allocation, bounded WCET, hardware-gated stimulation interlock.
+
+Aligned with [Mesh Memory Protocol v0.2.2](https://sym.bot/spec/mmp) §16.4, implements [MMP Consent Extension v0.1.0](https://sym.bot/spec/mmp-consent) co-designed with [Hongwei Xu](https://github.com/sym-bot) ([SYM.BOT](https://sym.bot)).
 
 Joint paper: *"Protocol-Level Consent for Cognitive Mesh Coupling"* — built on [arXiv:2604.03955](https://arxiv.org/abs/2604.03955) (SVAF).
 
 > *"The consent primitive was designed together — your BCI domain constraints shaped the spec."*
 > — [Hongwei Xu](https://sym.bot), Founder of SYM.BOT
+
+---
+
+## Layer positioning
+
+The MMP Consent Extension is a **protocol specification**. It defines frame types, a per-peer state machine, and conformance vectors. It says nothing about **how** implementations execute — that is left to each execution environment.
+
+```text
+Protocol layer    MMP Consent Extension v0.1.0
+                  ─ defines state transitions, frames, reason codes
+                  ─ implementation-agnostic, runtime-agnostic
+
+Execution layer   axonos-consent — Rust #![no_std], bare-metal,
+                  below the protocol boundary
+                  ─ enforces transitions in hard real-time
+                  ─ gates hardware stimulation via Secure World GPIO
+                  ─ bounded WCET; no heap, no GC, no async
+```
+
+**Protocols define state transitions. `axonos-consent` is the runtime that enforces them under real-time constraints.** Other implementations exist — the Node.js reference in [`sym`](https://github.com/sym-bot/sym) is the relay-side client — but they target different execution profiles (soft real-time, general-purpose runtime) and do not claim hard WCET bounds or hardware-gated enforcement.
 
 ---
 
@@ -30,47 +52,51 @@ Consent operates at **Layer 2** (Connection) of the [MMP 8-layer stack](https://
 
 ```text
 ┌─────────────────────────────────────────────────┐
-│  Non-Secure World (A53)                         │
+│  Non-Secure World (A53 / application core)      │
 │  ┌──────────────────────────────────────────┐   │
-│  │  Network Task                            │   │
+│  │  Network task                            │   │
 │  │  ├─ JSON codec (relay boundary)          │   │
 │  │  └─ Frame parser ↔ sym relay (MMP §7)    │   │
 │  └──────────────┬───────────────────────────┘   │
 │                 │ nsc_withdraw_consent()         │
 ├─────────────────┼───────────────────────────────┤
-│  Secure World   │ (TrustZone-S)                 │
+│  Secure World   │ (TrustZone, target platform)  │
 │                 ▼                                │
 │  ┌──────────────────────────────────────────┐   │
-│  │  ConsentEngine (zero-alloc)              │   │
-│  │  ├─ Per-peer state machine (8 slots)     │   │
-│  │  ├─ CBOR codec (bounded decoder)         │   │
-│  │  ├─ Invariants layer (MUST/SHOULD/MAY)   │   │
-│  │  └─ StimGuard → Secure GPIO DAC gate     │   │
+│  │  ConsentEngine (this crate)              │   │
+│  │  wire → decode → validate → transition   │   │
+│  │  → StimGuard → Secure GPIO DAC gate      │   │
 │  └──────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────┘
 ```
 
-**Why Layer 2.** If consent operated at Layer 4, the [SVAF](https://arxiv.org/abs/2604.03955) coupling engine could delay or deprioritise a withdrawal request. Consent at Layer 2 eliminates this class of failure. The brain is safe before the network knows.
+**Why Layer 2.** If consent operated at Layer 4, the [SVAF](https://arxiv.org/abs/2604.03955) coupling engine could delay or deprioritise a withdrawal request. Consent at Layer 2 eliminates this class of failure in any compliant implementation — AxonOS is where the guarantee is physically enforced on hardware.
 
 ---
 
 ## Interoperability
 
-Two implementations of the same written specification — Rust `#![no_std]` ([axonos-consent](https://github.com/AxonOS-org/axonos-consent)) and Node.js ([sym](https://github.com/sym-bot/sym)) — with the second implementation's design grounded by a documented audit of the first ([§6.1.2 methodology](https://sym.bot/spec/mmp-consent)).
-
-**15/15 canonical interop vectors — PASS**
-
-Validated against [SYM.BOT](https://sym.bot) production mesh (5 active nodes, April 2026). Four consent frames (`withdraw`, `suspend`, `resume`, `STIMGUARD_LOCKOUT`) forwarded by relay, silently ignored by all production nodes per [MMP §7](https://sym.bot/spec/mmp) forward compatibility. Zero errors.
+The MMP Consent Extension specification has two implementations as of April 2026, each targeting a different execution profile.
 
 ### Compatibility matrix
 
-| Spec version | Implementation | Vectors | Result |
-|:---:|:---:|:---:|:---:|
-| [v0.1.0](https://sym.bot/spec/mmp-consent) | Rust `no_std` ([axonos-consent](https://github.com/AxonOS-org/axonos-consent)) | 15/15 | **PASS** |
-| [v0.1.0](https://sym.bot/spec/mmp-consent) | Node.js ([sym](https://github.com/sym-bot/sym)) | 15/15 | **PASS** |
-| v0.2.2 | Rust `no_std` | 15/15 | **Backward-compatible** |
+| Spec version | Implementation | Role | Execution profile | Vectors | Result |
+|:---:|:---|:---|:---|:---:|:---:|
+| [Consent v0.1.0](https://sym.bot/spec/mmp-consent) | **axonos-consent v0.2.2** (this crate) | Reference hard real-time runtime | Rust `#![no_std]`, bare-metal Cortex-M, bounded WCET | **15/15** | **PASS** |
+| [Consent v0.1.0](https://sym.bot/spec/mmp-consent) | [sym](https://github.com/sym-bot/sym) (Node.js) | Reference relay-side client | Node.js V8, soft real-time | 15/15 | PASS |
+| [MMP v0.2.2](https://sym.bot/spec/mmp) | axonos-consent v0.2.2 | — | — | 15/15 | Backward-compatible |
 
-v0.2.2 is additive (audit trail, API ergonomics). State machine and wire format unchanged from v0.1.0.
+> **Interop verification across execution environments.** Both implementations pass the same 15 canonical vectors and produce identical state transitions for every input. Only `axonos-consent` targets the hard real-time + hardware-interlock profile required for BCI stimulation-gating deployments; the Node.js reference targets relay-side general-purpose deployments.
+
+**v0.2.2 note:** additive release (audit trail, API ergonomics). State machine and wire format unchanged from v0.1.0.
+
+### Two-implementation audit trail
+
+Design independence follows the [§6.1.2 qualified-independence methodology](https://sym.bot/spec/mmp-consent): `axonos-consent` (Rust) was the first implementation; [`sym`](https://github.com/sym-bot/sym) (Node.js) was built after a line-by-line audit of the Rust source, with engineering decisions appropriate to the Node.js runtime. Five documented divergences in error handling, failure policy, transport encoding, peer-table representation, and reason-code normalization demonstrate this is not a transliteration — same specification, independent engineering realizations.
+
+### Field validation
+
+Validated against [SYM.BOT](https://sym.bot) production mesh (5 active nodes, April 2026). Four consent frames (`withdraw`, `suspend`, `resume`, `STIMGUARD_LOCKOUT`) forwarded by relay; non-consent-enabled production nodes silently ignored them per [MMP §7](https://sym.bot/spec/mmp) forward compatibility. Zero transport errors. This validates MMP §7 forward-compatibility behaviour; consent-semantics interoperability is established by the 15/15 vector conformance.
 
 ### Integrity lock
 
@@ -96,10 +122,13 @@ let result = engine.process_raw(&peer_id, cbor_bytes, now_us)?;
 // result.warnings  : SHOULD-level advisories (RFC 2119)
 ```
 
-Full pipeline — no other function combination needed:
+Full runtime pipeline — no other function combination needed:
 
 ```text
-process_raw → CBOR decode (bounded) → invariant check (MUST/SHOULD) → state transition (3×3) → StimGuard
+process_raw  →  CBOR decode (bounded)
+             →  invariant check (MUST/SHOULD, RFC 2119)
+             →  state transition (exhaustive 3×3 FSM)
+             →  StimGuard hardware interlock
 ```
 
 ---
@@ -136,12 +165,12 @@ See [`state.rs`](src/state.rs) — `apply_frame()`.
 | Property | Guarantee | Enforcement |
 |:---|:---|:---|
 | `#![no_std]` | Default build, no heap | [`Cargo.toml`](Cargo.toml) |
-| Zero-allocation | `ReasonBuf` 64B fixed, encoder writes to `&mut [u8]` | [`frames.rs`](src/frames.rs) |
+| Zero-allocation | `ReasonBuf` 64 B fixed, encoder writes to `&mut [u8]` | [`frames.rs`](src/frames.rs) |
 | Bounded parsing | `MAX_MAP=8` · `MAX_STR=128` · `MAX_DEPTH=4` | [`cbor.rs`](src/codec/cbor.rs) |
 | No unsafe | `#![forbid(unsafe_code)]` — compile-time | [`lib.rs`](src/lib.rs) |
 | Exhaustive FSM | 3×3 table, compiler-checked, no wildcards | [`state.rs`](src/state.rs) |
-| Deterministic | O(1) transitions, O(n≤8) decode | [`engine.rs`](src/engine.rs) |
-| WITHDRAWN terminal | Any frame after WITHDRAWN → REJECT | [`state.rs`](src/state.rs) |
+| Deterministic | O(1) transitions, O(n ≤ 8) decode | [`engine.rs`](src/engine.rs) |
+| `WITHDRAWN` terminal | Any frame after `WITHDRAWN` → REJECT | [`state.rs`](src/state.rs) |
 | Layer 2 | Below coupling (Layer 4), below [SVAF](https://arxiv.org/abs/2604.03955) | [MMP §16.4](https://sym.bot/spec/mmp) |
 
 ---
@@ -154,19 +183,19 @@ See [`state.rs`](src/state.rs) — `apply_frame()`.
 | String bomb | `MAX_STRING_LEN` | 128 B | [`cbor.rs`](src/codec/cbor.rs) |
 | Stack overflow | `MAX_NESTING_DEPTH` | 4 | [`cbor.rs`](src/codec/cbor.rs) |
 | Type confusion | Bitmask duplicate key detection | 7 keys | [`cbor.rs`](src/codec/cbor.rs) |
-| Unsupported CBOR | Explicit reject: types 1,2,4,6,7 | [RFC 8949](https://www.rfc-editor.org/rfc/rfc8949) | [`cbor.rs`](src/codec/cbor.rs) |
+| Unsupported CBOR | Explicit reject: types 1, 2, 4, 6, 7 | [RFC 8949](https://www.rfc-editor.org/rfc/rfc8949) | [`cbor.rs`](src/codec/cbor.rs) |
 | Buffer overflow | `Err(BufferTooSmall)` | 256 B | [`cbor.rs`](src/codec/cbor.rs) |
-| State violation | `apply_frame()` REJECT | Compiler | [`state.rs`](src/state.rs) |
+| State violation | `apply_frame()` REJECT | Compile-time exhaustiveness | [`state.rs`](src/state.rs) |
 
 ---
 
 ## Error taxonomy
 
 ```text
-L1 (Wire)    → Error::Decode     — malformed CBOR, bounds, unsupported types
-L2 (Struct)  → Error::Invariant  — MUST violations (§10)
-L3 (State)   → Error::Transition — WITHDRAWN→any, peer not found
-L4 (System)  → Error::Encode     — buffer too small
+L1 (Wire)     → Error::Decode     — malformed CBOR, bounds, unsupported types
+L2 (Struct)   → Error::Invariant  — MUST violations (§10)
+L3 (State)    → Error::Transition — WITHDRAWN → any, peer not found
+L4 (System)   → Error::Encode     — buffer too small
 ```
 
 `#[must_use]` on `Error` enum. `From` conversions for each layer. See [`error.rs`](src/error.rs).
@@ -175,16 +204,16 @@ L4 (System)  → Error::Encode     — buffer too small
 
 ## WCET analysis
 
-Per-operation worst-case timing on Cortex-M4F @ 168 MHz ([`engine.rs`](src/engine.rs)):
+Per-operation worst-case timing on Cortex-M4F @ 168 MHz (instruction-count derived; [`engine.rs`](src/engine.rs)). GPIO-validated oscilloscope measurement on Cortex-M33 is the next milestone.
 
-| Operation | WCET | Complexity |
+| Operation | WCET† | Complexity |
 |:---|:---:|:---|
 | `process_raw` (full pipeline incl. CBOR decode) | <10 µs | O(n), n ≤ 8 fields |
 | `process_frame` (already-decoded path) | <1 µs | O(1) |
 | `withdraw_all` (emergency global kill, 8 peers) | <5 µs | O(MAX_PEERS) |
 | §5.1 steps 3–5 (emergency button → DAC gate) | <1 µs | O(1), non-preemptible |
 
-All four figures are operation-specific. The joint paper uses per-operation attribution, not a collapsed headline.
+† Instruction-count derived on Cortex-M4F; GPIO-validated measurement on Cortex-M33 is the next milestone. All figures are per-operation — the joint paper uses per-operation attribution, not a collapsed headline.
 
 ---
 
@@ -227,7 +256,7 @@ Unknown codes → `UNSPECIFIED` (forward-compatible per §3.4). See [`reason.rs`
 | [IEC 60601-1](https://www.iso.org/standard/65529.html) | Essential performance, basic safety | StimGuard enforcement |
 | [ISO 14971](https://www.iso.org/standard/72704.html) | Risk management for medical devices | [Threat model](#threat-model) |
 | [UNESCO 2025](https://www.unesco.org/en/articles/ethics-neurotechnology) | Ethics of Neurotechnology — consent sovereignty | "at any time" withdrawal right |
-| [Shannon criteria](https://doi.org/10.1109/10.126616) | Charge density limits (k=1.75, ≤30 µC/cm²) | [`stim_guard.rs`](src/stim_guard.rs) |
+| [Shannon criteria](https://doi.org/10.1109/10.126616) | Charge density limits (k=1.75, ≤ 30 µC/cm²) | [`stim_guard.rs`](src/stim_guard.rs) |
 | [FDA BCI Guidance](https://www.fda.gov/regulatory-information/search-fda-guidance-documents/implanted-brain-computer-interface-bci-devices-patients-paralysis-or-amputation-non-clinical-testing) | Implanted BCI non-clinical testing (2021) | Cybersecurity + safety |
 
 ---
@@ -239,7 +268,7 @@ src/
 ├── lib.rs             # #![forbid(unsafe_code)], spec-to-code mapping
 ├── state.rs           # ConsentState + apply_frame (exhaustive 3×3)
 ├── engine.rs          # ConsentEngine, process_raw, process_frame
-├── frames.rs          # Frame types, ReasonBuf (64B zero-alloc)
+├── frames.rs          # Frame types, ReasonBuf (64 B zero-alloc)
 ├── reason.rs          # ReasonCode registry (§3.4)
 ├── invariants.rs      # MUST/SHOULD/MAY enforcement (§10)
 ├── error.rs           # Layered error taxonomy (L1–L4)
@@ -265,7 +294,7 @@ fuzz/
 cargo build --release --target thumbv7em-none-eabihf --no-default-features
 ```
 
-Zero dependencies. No OS required. Bare-metal Cortex-M4F ready.
+Zero runtime dependencies in `no_std` mode. No OS required. Bare-metal Cortex-M4F ready.
 
 ---
 
