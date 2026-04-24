@@ -309,4 +309,4 @@ The MMP and MMP Consent Extension specifications that this crate implements are 
 
 ---
 
-**AxonOS** · [axonos.org](https://axonos.org) · [medium.com/@AxonOS](https://medium.com/@AxonOS) · axonosorg@gmail.com
+**AxonOS** · [axonos.org](https://axonos.org) · [medium.com/@AxonOS](https://medium.com/@AxonOS) · [linkedin.com/in/axonos](https://www.linkedin.com/in/axonos) · axonosorg@gmail.com
