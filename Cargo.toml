@@ -2,13 +2,25 @@
 name = "axonos-consent"
 version = "0.2.2"
 edition = "2021"
+rust-version = "1.75"
 authors = ["Denis Yermakou <axonosorg@gmail.com>"]
-description = "MMP Consent Extension — reference implementation. Deterministic consent enforcement for BCI cognitive mesh coupling. Aligned with MMP v0.2.2."
+description = "The Rust reference implementation of the MMP Consent Extension v0.1.0 (specification authored by SYM.BOT, CC-BY-4.0). Deterministic consent enforcement for BCI applications. no_std, zero-allocation, bounded WCET. Targets MMP v0.2.3."
 license = "Apache-2.0 OR MIT"
 repository = "https://github.com/AxonOS-org/axonos-consent"
-keywords = ["bci", "consent", "mmp", "real-time", "no_std"]
-categories = ["embedded", "no-std"]
+homepage = "https://axonos.org"
+documentation = "https://docs.rs/axonos-consent"
 readme = "README.md"
+keywords = ["bci", "consent", "mmp", "real-time", "no-std"]
+categories = ["embedded", "no-std", "hardware-support", "science"]
+
+include = [
+    "src/**/*.rs",
+    "Cargo.toml",
+    "README.md",
+    "LICENSE-APACHE",
+    "LICENSE-MIT",
+    "CHANGELOG.md",
+]
 
 [features]
 default = []
@@ -22,3 +34,8 @@ serde_json = { version = "1.0", optional = true }
 
 [dev-dependencies]
 serde_json = "1.0"
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+targets = ["x86_64-unknown-linux-gnu", "thumbv7em-none-eabihf"]

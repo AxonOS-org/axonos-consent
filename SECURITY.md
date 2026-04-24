@@ -12,7 +12,7 @@ This policy applies to:
 
 Out of scope:
 
-- The MMP base protocol (report to SYM.BOT at https://sym.bot).
+- The MMP base protocol and MMP Consent Extension specifications themselves (authored by SYM.BOT; spec-level issues report to sym.bot).
 - Downstream applications built against this crate (report to their maintainers).
 
 ## Reporting

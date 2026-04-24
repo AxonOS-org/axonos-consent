@@ -6,7 +6,7 @@ Thank you for your interest. This is the reference hard real-time runtime for th
 
 Two things to understand before sending a PR:
 
-1. **Wire format and state machine are co-owned with SYM.BOT** under the MMP Consent Extension v0.1.0 specification at https://sym.bot/spec/mmp-consent. Changes that touch frame types, state transitions, or reason codes cannot be merged unilaterally — they need co-approval from the spec maintainers. Start an issue first.
+1. **Wire format and state machine are defined by the specification** (MMP Consent Extension v0.1.0, authored by SYM.BOT, CC-BY-4.0). This crate implements the specification; it does not define it. Changes to this crate that would cause it to diverge from the published specification are out of scope — open an issue to discuss test coverage instead. Changes that affect the specification itself must be raised with SYM.BOT, not here.
 
 2. **`#![forbid(unsafe_code)]` is non-negotiable.** We do not accept PRs that introduce `unsafe` blocks. If you hit a place where you think `unsafe` is required, open an issue describing the constraint — there is almost always a safe way to express it.
 
@@ -73,7 +73,7 @@ All of the above must pass before a PR will be reviewed.
 
 - Every bug fix: add a regression test.
 - Every new public function: add a unit test.
-- Wire-format changes: the 15 canonical vectors must continue to pass byte-for-byte. If you need a new vector, coordinate with SYM.BOT so it is added to the shared vector set with a new SHA-256 lock.
+- Wire-format changes: the 15 canonical vectors (defined by the specification) must continue to pass byte-for-byte. The vector file in this repository is reproduced from the specification and should not be modified here — any vector updates come from SYM.BOT as part of specification revisions.
 
 ## Security issues
 
