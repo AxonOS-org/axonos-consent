@@ -2,12 +2,10 @@
 //!
 //! Run with: `cargo run --example basic_usage --features std`
 
-use axonos_consent::{
-    ConsentEvent, ConsentMachine, ConsentState,
-    crypto::compute_tag,
-    wire::{FLAG_TERMINAL, FLAG_REPLAY_TOLERANT},
-    interlock::ObservationGate,
-};
+use axonos_consent::crypto::compute_tag;
+use axonos_consent::interlock::ObservationGate;
+use axonos_consent::wire::{FLAG_REPLAY_TOLERANT, FLAG_TERMINAL};
+use axonos_consent::{ConsentEvent, ConsentMachine, ConsentState};
 
 fn main() {
     println!("=== AxonOS Consent — basic usage example ===\n");
@@ -47,7 +45,9 @@ fn main() {
 
 fn build_event(state: u8, mid: u16, pk: &[u8; 32], flags: u8) -> ConsentEvent {
     let mut e = ConsentEvent {
-        state, flags, manifest_id: mid,
+        state,
+        flags,
+        manifest_id: mid,
         timestamp_us: 1_700_000_000_000_000,
         sig_truncated: 0,
     };

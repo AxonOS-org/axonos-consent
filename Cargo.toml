@@ -3,29 +3,15 @@ name = "axonos-consent"
 version = "0.3.0"
 edition = "2021"
 rust-version = "1.75"
-authors = ["Denis Yermakou <connect@axonos.org>"]
-description = "AxonOS-native deterministic neural consent runtime for no_std BCI systems."
+authors = ["Denis Yermakou <info@axonos.org>"]
+description = "Protocol-level consent enforcement for AxonOS — kernel-level state machine, formally bounded, no_std."
 documentation = "https://docs.rs/axonos-consent"
 repository = "https://github.com/AxonOS-org/axonos-consent"
 homepage = "https://axonos.org"
 license = "Apache-2.0 OR MIT"
 readme = "README.md"
-
-keywords = [
-    "bci",
-    "consent",
-    "real-time",
-    "no-std",
-    "embedded",
-]
-
-categories = [
-    "embedded",
-    "no-std",
-    "cryptography",
-    "data-structures",
-]
-
+keywords = ["bci", "consent", "real-time", "no-std", "embedded"]
+categories = ["embedded", "no-std", "cryptography", "data-structures"]
 include = [
     "src/**/*",
     "Cargo.toml",
@@ -47,7 +33,7 @@ default = []
 std = []
 
 [dependencies]
-# This crate carries no external dependencies at v0.3.0.
+# All dependencies are no_std-compatible; the crate carries no external deps at v0.3.0.
 
 [profile.release]
 codegen-units = 1

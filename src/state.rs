@@ -104,24 +104,23 @@ impl ConsentMachine {
 ///
 /// Made `pub` so test code and the kernel interlock can query the transition
 /// graph without instantiating a machine.
+///
+/// Admissible transitions: identity (idempotent re-application), pause/resume,
+/// and revocation from either active state. The two inadmissible transitions
+/// (`Withdrawn → Granted` and `Withdrawn → Suspended`) are not in the match
+/// arm, so this function returns false for them.
 pub const fn is_admissible_transition(from: ConsentState, to: ConsentState) -> bool {
     use ConsentState::{Granted, Suspended, Withdrawn};
     matches!(
         (from, to),
-        // Identity (idempotent re-application is always allowed)
         (Granted, Granted)
             | (Suspended, Suspended)
             | (Withdrawn, Withdrawn)
-            // Pause / resume
             | (Granted, Suspended)
             | (Suspended, Granted)
-            // Revoke from either active state
             | (Granted, Withdrawn)
             | (Suspended, Withdrawn)
     )
-    // The two inadmissible transitions are Withdrawn → Granted and
-    // Withdrawn → Suspended; the match above does not cover them, so this
-    // function returns false for them.
 }
 
 #[cfg(test)]
@@ -160,7 +159,11 @@ mod tests {
 
     #[test]
     fn from_u8_round_trips_known_states() {
-        for s in [ConsentState::Granted, ConsentState::Suspended, ConsentState::Withdrawn] {
+        for s in [
+            ConsentState::Granted,
+            ConsentState::Suspended,
+            ConsentState::Withdrawn,
+        ] {
             assert_eq!(ConsentState::from_u8(s as u8).unwrap(), s);
         }
     }
@@ -168,7 +171,10 @@ mod tests {
     #[test]
     fn from_u8_rejects_unknown() {
         for b in [0x00u8, 0x04, 0x10, 0x7F, 0xFF] {
-            assert!(matches!(ConsentState::from_u8(b), Err(ConsentError::ReservedDiscriminant)));
+            assert!(matches!(
+                ConsentState::from_u8(b),
+                Err(ConsentError::ReservedDiscriminant)
+            ));
         }
     }
 }
