@@ -24,44 +24,42 @@ pub const FLAG_FROM_SECURE_WORLD: u8 = 1 << 1;
 pub const FLAG_REPLAY_TOLERANT: u8 = 1 << 2;
 
 /// Mask of all currently-defined flag bits. Bits outside this mask are reserved.
-pub const FLAGS_DEFINED_MASK: u8 =
-    FLAG_TERMINAL | FLAG_FROM_SECURE_WORLD | FLAG_REPLAY_TOLERANT;
+pub const FLAGS_DEFINED_MASK: u8 = FLAG_TERMINAL | FLAG_FROM_SECURE_WORLD | FLAG_REPLAY_TOLERANT;
 
 /// A consent event as it crosses the trusted-path / kernel boundary.
 ///
 /// 16 bytes on the wire, little-endian. See SPEC §6.1.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub struct ConsentEvent {
-    /// Target state discriminant (one of 0x01 `Granted`, 0x02 `Suspended`, 0x03 `Withdrawn`).
+    /// Target state discriminant: 0x01 `Granted`, 0x02 `Suspended`, 0x03 `Withdrawn`.
     pub state: u8,
 
     /// Flag bitfield. See [`FLAG_TERMINAL`], [`FLAG_FROM_SECURE_WORLD`], [`FLAG_REPLAY_TOLERANT`].
     pub flags: u8,
 
-    /// Per-device unique manifest identifier (16-bit, allowing 65,536 concurrent installations).
+    /// Per-device unique manifest identifier (16-bit; 65,536 concurrent installations).
     pub manifest_id: u16,
 
     /// Kernel monotonic timestamp at event signing, in microseconds.
     pub timestamp_us: u64,
 
-    /// Truncated Ed25519 signature (4 bytes; collision resistance ~ 2^32 against accidental corruption only).
-    /// The full 64-byte signature is verified out-of-band by the trusted-path crypto path.
+    /// Truncated Ed25519 signature (4 bytes; collision resistance ~ 2^32 against
+    /// accidental corruption only). The full 64-byte signature is verified
+    /// out-of-band by the trusted-path crypto path.
     pub sig_truncated: u32,
 }
 
 impl ConsentEvent {
     /// Decode a wire-format buffer of exactly [`WIRE_SIZE`] bytes.
     ///
-    /// Refuses any other length, any reserved-bit-set flags byte, and any unknown
-    /// state discriminant.
+    /// Refuses any other length, any reserved-bit-set flags byte, and any
+    /// unknown state discriminant.
     pub fn from_bytes(buf: &[u8]) -> Result<Self, ConsentError> {
         if buf.len() != WIRE_SIZE {
             return Err(ConsentError::WireFormatLength);
         }
 
         let state = buf[0];
-        // Validate state byte is one of the three known discriminants. Use the
-        // const transition graph: if from_u8 fails, the event is malformed.
         crate::state::ConsentState::from_u8(state)?;
 
         let flags = buf[1];
@@ -103,11 +101,11 @@ mod tests {
     #[test]
     fn roundtrip_canonical_event() {
         let original = ConsentEvent {
-            state: 0x02, // Suspended
+            state: 0x02,
             flags: FLAG_REPLAY_TOLERANT,
             manifest_id: 0xA5B4,
-            timestamp_us: 0x0102030405060708,
-            sig_truncated: 0xDEADBEEF,
+            timestamp_us: 0x0102_0304_0506_0708,
+            sig_truncated: 0xDEAD_BEEF,
         };
         let bytes = original.to_bytes();
         assert_eq!(bytes.len(), 16);
@@ -134,8 +132,8 @@ mod tests {
     #[test]
     fn rejects_reserved_flag_bit() {
         let mut buf = [0u8; 16];
-        buf[0] = 0x01; // valid state
-        buf[1] = 0x80; // reserved bit set
+        buf[0] = 0x01;
+        buf[1] = 0x80;
         assert!(matches!(
             ConsentEvent::from_bytes(&buf),
             Err(ConsentError::ReservedFlagBit)
@@ -145,7 +143,7 @@ mod tests {
     #[test]
     fn rejects_reserved_state_discriminant() {
         let mut buf = [0u8; 16];
-        buf[0] = 0x00; // reserved
+        buf[0] = 0x00;
         assert!(matches!(
             ConsentEvent::from_bytes(&buf),
             Err(ConsentError::ReservedDiscriminant)

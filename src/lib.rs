@@ -11,12 +11,12 @@
 //!
 //! # Quickstart
 //!
-//! ```rust
+//! ```
 //! use axonos_consent::{ConsentMachine, ConsentState};
 //!
-//! let manifest_id = 1;
-//! let trusted_path_pubkey = [0u8; 32];  // Ed25519 public key
-//! let mut machine = ConsentMachine::new(manifest_id, trusted_path_pubkey);
+//! let manifest_id: u16 = 1;
+//! let trusted_path_pubkey = [0u8; 32];
+//! let machine = ConsentMachine::new(manifest_id, trusted_path_pubkey);
 //! assert_eq!(machine.state(), ConsentState::Granted);
 //! ```
 //!
@@ -36,16 +36,16 @@
 #![deny(missing_docs)]
 #![deny(unused_must_use)]
 
-pub mod state;
-pub mod wire;
 pub mod crypto;
 pub mod error;
 pub mod interlock;
+pub mod state;
+pub mod wire;
 
-pub use crate::state::{ConsentMachine, ConsentState};
-pub use crate::wire::ConsentEvent;
 pub use crate::error::ConsentError;
 pub use crate::interlock::ObservationGate;
+pub use crate::state::{ConsentMachine, ConsentState};
+pub use crate::wire::ConsentEvent;
 
 /// Specification version this crate implements.
 pub const SPEC_VERSION: &str = "0.3.0";

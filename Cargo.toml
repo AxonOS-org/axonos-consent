@@ -2,9 +2,9 @@
 name = "axonos-consent"
 version = "0.3.0"
 edition = "2021"
-rust-version = "1.85"
+rust-version = "1.75"
 authors = ["Denis Yermakou <info@axonos.org>"]
-description = "Protocol-level consent enforcement for AxonOS — kernel-level state machine, formally bounded, #![no_std]."
+description = "Protocol-level consent enforcement for AxonOS — kernel-level state machine, formally bounded, no_std."
 documentation = "https://docs.rs/axonos-consent"
 repository = "https://github.com/AxonOS-org/axonos-consent"
 homepage = "https://axonos.org"
@@ -31,26 +31,14 @@ path = "src/lib.rs"
 [features]
 default = []
 std = []
-# Property-based testing requires std
-proptest = ["dep:proptest", "std"]
 
 [dependencies]
-# Core dependencies (all no_std-compatible)
-
-# Property-based testing dependency (gated)
-[dependencies.proptest]
-version = "1.4"
-optional = true
-default-features = false
-features = ["alloc"]
-
-[dev-dependencies]
-proptest = { version = "1.4", default-features = false, features = ["alloc"] }
+# All dependencies are no_std-compatible; the crate carries no external deps at v0.3.0.
 
 [profile.release]
 codegen-units = 1
 lto = "fat"
-opt-level = "z"      # size-optimised for embedded targets
+opt-level = "z"
 debug = false
 strip = true
 panic = "abort"
@@ -60,9 +48,11 @@ opt-level = 0
 debug = true
 overflow-checks = true
 
-[package.metadata.docs.rs]
-all-features = true
-rustdoc-args = ["--cfg", "docsrs"]
+[[example]]
+name = "basic_usage"
+required-features = ["std"]
 
-[badges]
-maintenance = { status = "actively-developed" }
+[[bench]]
+name = "withdrawal_latency"
+harness = false
+required-features = ["std"]
