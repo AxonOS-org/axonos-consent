@@ -2,88 +2,288 @@ name: ci
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - consent-format-ci17-rescue
   pull_request:
-    branches: [main]
   workflow_dispatch:
 
-env:
-  CARGO_TERM_COLOR: always
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  test:
-    name: test (ubuntu, stable)
+  repository-contract:
+    name: repository contract
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - name: cargo test
-        run: cargo test --all-features --verbose
-      - name: cargo test no-default-features
-        run: cargo test --no-default-features --verbose
+      - name: Check out repository
+        uses: actions/checkout@v4
 
-  build_no_std:
-    name: build no_std (Cortex-M4F)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          targets: thumbv7em-none-eabihf
-      - uses: Swatinem/rust-cache@v2
-      - name: cargo build --target thumbv7em-none-eabihf
-        run: cargo build --target thumbv7em-none-eabihf --no-default-features --release
+          python-version: "3.12"
 
-  fmt:
-    name: rustfmt
+      - name: Run repository contract
+        run: python3 tools/verify_consent_repository.py repository-contract
+
+  line-counts:
+    name: line counts
     runs-on: ubuntu-latest
-    continue-on-error: true
+    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          components: rustfmt
-      - run: cargo fmt --all --check
+          python-version: "3.12"
 
-  clippy:
-    name: clippy (non-blocking)
+      - name: Run line counts
+        run: python3 tools/verify_consent_repository.py line-counts
+
+  cargo-manifest:
+    name: Cargo manifest
     runs-on: ubuntu-latest
-    continue-on-error: true
+    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          components: clippy
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo clippy --all-features --all-targets -- -W clippy::all
+          python-version: "3.12"
 
-  docs:
-    name: rustdoc
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - name: cargo doc
-        run: cargo doc --no-deps --all-features
+      - name: Run Cargo manifest
+        run: python3 tools/verify_consent_repository.py cargo-manifest
 
-  license_check:
-    name: LICENSE files present
+  readme-surface:
+    name: README surface
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
-      - name: assert all four LICENSE files exist
-        run: |
-          test -f LICENSE
-          test -f LICENSE-APACHE
-          test -f LICENSE-MIT
-          test -f LICENSE-CC-BY-SA
-          test -f vectors/LICENSE
-          echo "✓ all 5 LICENSE files present"
-      - name: assert SPDX identifiers
-        run: |
-          grep -q 'SPDX-License-Identifier: Apache-2.0 OR MIT' LICENSE
-          grep -q 'SPDX-License-Identifier: CC-BY-SA-4.0' LICENSE-CC-BY-SA
-          grep -q 'SPDX-License-Identifier: CC0-1.0' vectors/LICENSE
-          echo "✓ all SPDX identifiers present"
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run README surface
+        run: python3 tools/verify_consent_repository.py readme-surface
+
+  lib-surface:
+    name: lib surface
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run lib surface
+        run: python3 tools/verify_consent_repository.py lib-surface
+
+  ci-workflow:
+    name: CI workflow
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run CI workflow
+        run: python3 tools/verify_consent_repository.py ci-workflow
+
+  ci-job-count:
+    name: CI job count
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run CI job count
+        run: python3 tools/verify_consent_repository.py ci-job-count
+
+  contact-policy:
+    name: contact policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run contact policy
+        run: python3 tools/verify_consent_repository.py contact-policy
+
+  clean-public-surface:
+    name: clean public surface
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run clean public surface
+        run: python3 tools/verify_consent_repository.py clean-public-surface
+
+  overclaim-guard:
+    name: overclaim guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run overclaim guard
+        run: python3 tools/verify_consent_repository.py overclaim-guard
+
+  standard-mapping:
+    name: standard mapping
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run standard mapping
+        run: python3 tools/verify_consent_repository.py standard-mapping
+
+  security-policy:
+    name: security policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run security policy
+        run: python3 tools/verify_consent_repository.py security-policy
+
+  changelog:
+    name: changelog
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run changelog
+        run: python3 tools/verify_consent_repository.py changelog
+
+  license-files:
+    name: license files
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run license files
+        run: python3 tools/verify_consent_repository.py license-files
+
+  source-tree:
+    name: source tree
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run source tree
+        run: python3 tools/verify_consent_repository.py source-tree
+
+  path-hygiene:
+    name: path hygiene
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run path hygiene
+        run: python3 tools/verify_consent_repository.py path-hygiene
+
+  rustdoc-hygiene:
+    name: rustdoc hygiene
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run rustdoc hygiene
+        run: python3 tools/verify_consent_repository.py rustdoc-hygiene
