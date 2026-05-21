@@ -2,15 +2,40 @@
 
 # axonos-consent
 
-### Protocol-level consent enforcement for AxonOS — a solo specification by Denis Yermakou.
+### Protocol-level consent enforcement for AxonOS.
 
-[![Crate](https://img.shields.io/badge/crate-v0.3.0-orange)](./Cargo.toml)
-[![Specification](https://img.shields.io/badge/spec-v0.3.0-blue)](./SPEC.md)
-[![License: CC-BY-SA-4.0 (spec)](https://img.shields.io/badge/spec--license-CC--BY--SA--4.0-lightgrey.svg)](./LICENSE-CC-BY-SA)
-[![License: Apache-2.0 OR MIT (code)](https://img.shields.io/badge/code--license-Apache--2.0%20OR%20MIT-blue.svg)](./LICENSE)
+#### A kernel-level finite-state machine with formally bounded withdrawal latency.
+
+<!-- ─── CI / Build ──────────────────────────────────────────────────── -->
+
+[![CI](https://github.com/AxonOS-org/axonos-consent/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/AxonOS-org/axonos-consent/actions/workflows/ci.yml)
+[![Format](https://img.shields.io/badge/rustfmt-clean-success?logo=rust)](https://github.com/AxonOS-org/axonos-consent/actions/workflows/ci.yml)
+[![Clippy](https://img.shields.io/badge/clippy-passing-success?logo=rust)](https://github.com/AxonOS-org/axonos-consent/actions/workflows/ci.yml)
+[![no_std](https://img.shields.io/badge/no__std-thumbv7em--none--eabihf-blueviolet?logo=rust)](https://github.com/AxonOS-org/axonos-consent/actions/workflows/ci.yml)
+
+<!-- ─── Crate / Docs ────────────────────────────────────────────────── -->
+
+[![Crate](https://img.shields.io/badge/crate-v0.3.0-orange?logo=rust)](./Cargo.toml)
+[![Docs](https://img.shields.io/badge/docs-rustdoc-blue?logo=docsdotrs)](https://docs.rs/axonos-consent)
+[![Spec](https://img.shields.io/badge/spec-v0.3.0-blue)](./SPEC.md)
+[![MSRV](https://img.shields.io/badge/rustc-1.75%2B-lightgrey?logo=rust)](./Cargo.toml)
+
+<!-- ─── Quality / Safety ────────────────────────────────────────────── -->
+
+[![Unsafe forbidden](https://img.shields.io/badge/unsafe-forbidden-success?logo=rust)](./src/lib.rs)
 [![Verified: Kani BMC](https://img.shields.io/badge/verified-Kani%20BMC-success)](./kani/)
+[![Allocations](https://img.shields.io/badge/critical%20path-0%20alloc-success)](./SPEC.md#4-timing-bounds)
+[![WCRT](https://img.shields.io/badge/WCRT-%E2%89%A4%201648%20cycles-success)](./SPEC.md#4-timing-bounds)
 
-[Specification](./SPEC.md) · [Architecture](./docs/ARCHITECTURE.md) · [Security model](./docs/SECURITY-MODEL.md) · [Test vectors](./vectors/)
+<!-- ─── License ─────────────────────────────────────────────────────── -->
+
+[![License: Apache-2.0 OR MIT (code)](https://img.shields.io/badge/license--code-Apache--2.0%20OR%20MIT-blue.svg)](./LICENSE)
+[![License: CC-BY-SA-4.0 (spec)](https://img.shields.io/badge/license--spec-CC--BY--SA--4.0-lightgrey.svg)](./LICENSE-CC-BY-SA)
+[![License: CC0-1.0 (vectors)](https://img.shields.io/badge/license--vectors-CC0--1.0-lightgrey.svg)](./vectors/LICENSE)
+
+---
+
+[**Specification (v0.3.0)**](./SPEC.md) · [Architecture](./docs/ARCHITECTURE.md) · [Security model](./docs/SECURITY-MODEL.md) · [Design rationale](./docs/DESIGN-RATIONALE.md) · [Test vectors](./vectors/) · [Changelog](./CHANGELOG.md)
 
 </div>
 
@@ -18,16 +43,16 @@
 
 ## What this repository is
 
-This repository contains:
-
-1. The **AxonOS Consent Specification v0.3.0** — a solo specification by Denis Yermakou, defining the kernel-level state machine that mediates user permission for `IntentObservation` flow in a conformant AxonOS deployment.
-2. The **reference Rust implementation** — `#![no_std]` for ARMv8-M Cortex-M targets.
+1. The **[AxonOS Consent Specification v0.3.0](./SPEC.md)** — a solo specification by Denis Yermakou, defining the kernel-level state machine that mediates user permission for `IntentObservation` flow in a conformant AxonOS deployment.
+2. The **reference Rust implementation** — `#![no_std]`, `#![forbid(unsafe_code)]`, targeting ARMv8-M Cortex-M.
 3. The **Kani Bounded Model Checking harnesses** that produce the L1 evidence backing every timing claim.
-4. The **conformance test vectors** that any independent implementation must pass.
+4. The **conformance test vectors** that any independent implementation must pass, dedicated to the public domain under CC0-1.0.
 
-This is a **standalone subsystem of the AxonOS Project**. It has no external co-authors and no external coupling-protocol dependencies. The specification is downstream of the [AxonOS Standard](https://github.com/AxonOS-org/axonos-standard) §6.
+This is a **standalone subsystem of the AxonOS Project**. No external co-authors. No external coupling-protocol dependencies. The specification is downstream of the [AxonOS Standard](https://github.com/AxonOS-org/axonos-standard) §6.
 
-## The consent state machine in one diagram
+---
+
+## The consent state machine
 
 ```
        ┌───────────┐
@@ -47,46 +72,102 @@ This is a **standalone subsystem of the AxonOS Project**. It has no external co-
        └───────────┘
 ```
 
-`Withdrawn` is terminal. Only path back is a fresh manifest install through the trusted path. This non-reversibility is the central anti-coercion property.
+`Withdrawn` is terminal. The only path back is a fresh manifest install through the trusted path. **This non-reversibility is the central anti-coercion property.**
+
+---
 
 ## Performance envelope (reference hardware: STM32F407 @ 168 MHz)
 
-| Property | Value | Evidence |
+| Property | Value | Evidence level |
 |:---|---:|:---:|
 | Cycles per transition (upper bound) | **≤ 1648** | L1 (Kani-proven) |
 | Wall-clock per transition (upper bound) | **≤ 9.8 µs** | L1 |
 | End-to-end withdrawal → stream termination | **≤ 10 ms** | L1 composition |
-| Median (measured, 18-h soak, 12 × 10⁶ events) | 1098 cycles ≈ 6.5 µs | L2 |
-| 99.9th percentile (measured) | 1487 cycles ≈ 8.85 µs | L2 |
-| Worst observed (measured) | 1503 cycles ≈ 8.95 µs | L2 |
-| Source lines | 1,890 | — |
-| Files | 18 | — |
-| Allocations on critical path | 0 | static analysis |
+| Median (measured, 18-h soak, 12 × 10⁶ events) | 1098 cycles · ≈ 6.5 µs | L2 |
+| 99.9th percentile (measured) | 1487 cycles · ≈ 8.85 µs | L2 |
+| Worst observed (measured) | 1503 cycles · ≈ 8.95 µs | L2 |
+| Soak duration with zero unsafe states | 18 h / 12 × 10⁶ events | L2 |
+| Critical-path allocations | 0 | static analysis |
+| Source lines (`src/`) | 594 | — |
+| Unsafe blocks | 0 | `#![forbid(unsafe_code)]` |
 | Kani harnesses | 4 | passing at v0.3.0 |
 
-All measurements within the L1 bound; no Kani counterexamples at v0.3.0.
+All measurements within the L1 bound. No Kani counterexamples at v0.3.0.
+
+---
+
+## Continuous integration
+
+Every push and pull-request runs the full CI matrix in [.github/workflows/ci.yml](./.github/workflows/ci.yml). The seven CI jobs:
+
+| Job | What it checks | Blocking |
+|:---|:---|:---:|
+| `Format (rustfmt)` | `cargo fmt --all --check` — source is `cargo fmt`-clean | ✅ |
+| `Lint (clippy)` | `cargo clippy --all-features --all-targets` — no lint errors | ✅ |
+| `Test (ubuntu, stable)` | `cargo test` with both `--all-features` and `--no-default-features` | ✅ |
+| `Build no_std (Cortex-M4F)` | `cargo build --target thumbv7em-none-eabihf --no-default-features --release` | ✅ |
+| `Documentation (rustdoc)` | `cargo doc --no-deps` with `RUSTDOCFLAGS=-D warnings` (no broken intra-doc links) | ✅ |
+| `License files & SPDX` | All five LICENSE files present with correct SPDX identifiers | ✅ |
+| `CI` (aggregate) | Green check iff every job above passed | ✅ |
+
+A red X on any job blocks the merge. The aggregate `CI` job is what the branch-protection rule watches.
+
+---
 
 ## Repository layout
 
 ```
 axonos-consent/
-├── SPEC.md                  ← The canonical specification (this is the source of truth)
-├── README.md                ← This file
-├── CHANGELOG.md             ← Version history; v0.3.0 is a clean restart
-├── LICENSE                  ← Apache-2.0 OR MIT for code
+├── SPEC.md                  ← canonical specification (this is the source of truth)
+├── README.md                ← this file
+├── CHANGELOG.md             ← version history; v0.3.0 is a clean restart
+├── Cargo.toml               ← crate manifest; MSRV 1.75
+├── LICENSE                  ← Apache-2.0 OR MIT dispatcher for code
 ├── LICENSE-APACHE           ← Apache-2.0 full text
 ├── LICENSE-MIT              ← MIT full text
 ├── LICENSE-CC-BY-SA         ← CC-BY-SA-4.0 full text for the specification
-├── Cargo.toml               ← Crate manifest; pinned to MSRV 1.85
-├── src/                     ← Reference Rust implementation
+├── rustfmt.toml             ← formatting configuration
+├── rust-toolchain.toml      ← pins stable + rustfmt + clippy + thumbv7em
+│
+├── src/                     ← reference Rust implementation (#![no_std], 594 LOC)
+│   ├── lib.rs               ← crate root, exports, doctest
+│   ├── state.rs             ← consent FSM with AtomicU8
+│   ├── wire.rs              ← 16-byte little-endian wire format
+│   ├── crypto.rs            ← constant-time signature verification
+│   ├── error.rs             ← typed error taxonomy
+│   └── interlock.rs         ← ObservationGate trait for kernel IPC integration
+│
 ├── kani/                    ← Bounded-model-checking harnesses (L1 evidence)
-├── tests/                   ← Unit + integration + property tests
+│   ├── handle_withdraw_terminates.rs
+│   ├── fsm_no_invalid_transitions.rs
+│   ├── cbor_decoder_bounded.rs
+│   └── signature_verification_constant_time.rs
+│
+├── tests/                   ← unit + integration + property tests
+│   ├── integration.rs       ← full FSM lifecycle
+│   └── wire_format.rs       ← wire-format roundtrip + refusal cases
+│
 ├── benches/                 ← L2 measurement harnesses
-├── examples/                ← How to use the crate
-├── vectors/                 ← Conformance test vectors (wire-format)
-├── docs/                    ← Architecture, security model, design rationale
-└── .github/workflows/       ← CI: tests on 3 host OSes, no_std build, Kani, lint, security audit
+│   └── withdrawal_latency.rs
+│
+├── examples/                ← worked usage examples
+│   └── basic_usage.rs       ← (requires the `std` feature)
+│
+├── vectors/                 ← conformance test vectors (CC0-1.0; public domain)
+│   ├── README.md
+│   └── LICENSE
+│
+├── docs/                    ← informative companion documents
+│   ├── ARCHITECTURE.md
+│   ├── SECURITY-MODEL.md
+│   ├── DESIGN-RATIONALE.md
+│   └── citation.bib
+│
+└── .github/workflows/
+    └── ci.yml               ← 7-job CI: fmt, clippy, test, no_std build, docs, license, aggregate
 ```
+
+---
 
 ## Quick start
 
@@ -100,22 +181,19 @@ axonos-consent = "0.3"
 Use:
 
 ```rust
-#![no_std]
-use axonos_consent::{ConsentMachine, ConsentState, ConsentEvent};
+use axonos_consent::{ConsentMachine, ConsentState};
 
-let mut machine = ConsentMachine::new(manifest_id, trusted_path_pubkey);
+let manifest_id: u16 = 1;
+let trusted_path_pubkey = [0u8; 32];  // Ed25519 public key
+let machine = ConsentMachine::new(manifest_id, trusted_path_pubkey);
 assert_eq!(machine.state(), ConsentState::Granted);
-
-let event: ConsentEvent = receive_from_trusted_path();
-match machine.handle_event(event) {
-    Ok(new_state) => { /* state updated; publish errors to suspended/withdrawn streams */ },
-    Err(e)        => { /* refused: invalid signature, inadmissible transition, or wire-format error */ },
-}
 ```
 
-A worked example is in [`examples/basic_usage.rs`](./examples/basic_usage.rs).
+A worked example covering the full FSM lifecycle is in [`examples/basic_usage.rs`](./examples/basic_usage.rs).
 
-## Verifying L1 claims
+---
+
+## Verifying the L1 claims
 
 ```sh
 # Install Kani once
@@ -131,49 +209,61 @@ cargo kani --harness signature_verification_constant_time
 
 Each harness prints `VERIFICATION SUCCESSFUL` on a passing run. A counterexample, if any, is reported with the input that violates the bound.
 
+---
+
 ## Conformance against the specification
 
-A separate implementation can run the conformance vectors:
+Independent implementations can run the conformance vectors:
 
 ```sh
 cargo test --test conformance_vectors
 ```
 
-If your implementation is in another language, the vectors are exported in canonical binary form at [`vectors/`](./vectors/) and can be replayed by any wire-format-aware driver.
+For implementations in languages other than Rust, the vectors are exported in canonical binary form at [`vectors/`](./vectors/) under CC0-1.0; replay with any wire-format-aware driver.
+
+---
 
 ## Versioning
 
 | Version | Status | Notes |
 |:---|:---:|:---|
-| **v0.3.0** | **current** | Solo specification; clean restart; v1.0.0 of the spec text |
+| **v0.3.0** | **current** | Solo specification; clean restart; v1.0.0-equivalent of the spec text |
 | v0.2.x | superseded | pre-restart drafts |
 | v0.1.x | superseded | early drafts |
 
-A v1.0.0 crate release will accompany the second independent implementation of the v0.3.0 specification. Until then, the crate remains `0.y.z` to reflect that the implementation is not yet locked.
+A v1.0.0 crate release will accompany the second independent implementation. Until then, the crate remains `0.y.z` to reflect that the implementation surface is not yet locked.
 
-The **specification text** is at v0.3.0 and is stable; the *crate* may iterate at the patch level (`v0.3.x`) for bug fixes and ergonomic improvements without modifying the specification.
+The **specification text** is stable at v0.3.0; the *crate* may iterate at the patch level (`v0.3.x`) for bug fixes and ergonomic improvements without modifying the specification.
+
+---
 
 ## Authorship
 
-This repository is authored solely by **Denis Yermakou**.
+This repository is authored solely by **Denis Yermakou** — AxonOS Project, Singapore.
 
-- Specification: [SPEC.md](./SPEC.md) — Denis Yermakou, AxonOS Project, Singapore.
+- Specification text: [SPEC.md](./SPEC.md) — Denis Yermakou.
 - Reference implementation: same author, same project.
 - No external co-authors. No external coupling-protocol dependencies.
 
-Inquiries: [info@axonos.org](mailto:info@axonos.org). Security: [security@axonos.org](mailto:security@axonos.org).
+Inquiries: [info@axonos.org](mailto:info@axonos.org) · Security: [security@axonos.org](mailto:security@axonos.org).
+
+---
 
 ## Licensing
 
-- **Specification text** (`SPEC.md`, `docs/`, `README.md`): [CC-BY-SA-4.0](./LICENSE-CC-BY-SA).
-- **Source code** (`src/`, `tests/`, `benches/`, `examples/`): [Apache-2.0 OR MIT](./LICENSE) at your option.
-- **Test vectors** (`vectors/`): [CC0-1.0](./vectors/LICENSE) — interoperability vectors are dedicated to the public domain so any conformant implementation can use them freely.
+| Surface | License |
+|:---|:---|
+| Source code (`src/`, `tests/`, `benches/`, `examples/`) | [**Apache-2.0 OR MIT**](./LICENSE) at your option |
+| Specification text (`SPEC.md`, `docs/`, `README.md`) | [**CC-BY-SA-4.0**](./LICENSE-CC-BY-SA) |
+| Conformance test vectors (`vectors/`) | [**CC0-1.0**](./vectors/LICENSE) — public domain dedication |
+
+The test vectors are CC0 specifically so any independent implementation — in any language, under any license, commercial or otherwise — can use them without compatibility concerns.
 
 ---
 
 <div align="center">
 
-**axonos-consent · v0.3.0**
+**axonos-consent · v0.3.0 · solo specification**
 
 Singapore · Zurich · Berlin · Milano · San Mateo
 

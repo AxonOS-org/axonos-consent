@@ -4,10 +4,10 @@
 //! Host CPUs are much faster, so this bench measures a lower bound; useful for
 //! catching regressions.
 
-use std::time::Instant;
-use axonos_consent::{ConsentEvent, ConsentMachine};
 use axonos_consent::crypto::compute_tag;
 use axonos_consent::wire::FLAG_TERMINAL;
+use axonos_consent::{ConsentEvent, ConsentMachine};
+use std::time::Instant;
 
 fn main() {
     const N: usize = 1_000_000;

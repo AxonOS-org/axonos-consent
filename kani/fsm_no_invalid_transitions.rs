@@ -2,12 +2,12 @@
 //! a non-admissible transition. Specifically: from Withdrawn, no input can
 //! reach Granted or Suspended.
 
-use axonos_consent::{ConsentMachine, ConsentState};
+use axonos_consent::ConsentState;
 use axonos_consent::state::is_admissible_transition;
 
 #[kani::proof]
 fn fsm_no_invalid_transitions() {
-    use ConsentState::*;
+    use ConsentState::{Granted, Suspended, Withdrawn};
 
     // Two non-admissible transitions per SPEC §3.2:
     assert!(!is_admissible_transition(Withdrawn, Granted));
