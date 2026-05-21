@@ -25,9 +25,9 @@ impl ObservationGate for ConsentMachine {
 
     fn suppression_code(&self) -> u8 {
         match self.state() {
-            ConsentState::Granted => 0,         // n/a; should_publish() was true
-            ConsentState::Suspended => 0x05,    // ConsentSuspended per Standard §7.4
-            ConsentState::Withdrawn => 0x06,    // ConsentWithdrawn per Standard §7.4
+            ConsentState::Granted => 0,      // n/a; should_publish() was true
+            ConsentState::Suspended => 0x05, // ConsentSuspended per Standard §7.4
+            ConsentState::Withdrawn => 0x06, // ConsentWithdrawn per Standard §7.4
         }
     }
 }

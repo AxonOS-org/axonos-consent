@@ -58,7 +58,10 @@ fn idempotent_reapplication_succeeds() {
     let mut m = ConsentMachine::new(7, pk);
 
     let granted_again = make_event(0x01, 7, &pk, FLAG_REPLAY_TOLERANT);
-    assert_eq!(m.handle_event(granted_again).unwrap(), ConsentState::Granted);
+    assert_eq!(
+        m.handle_event(granted_again).unwrap(),
+        ConsentState::Granted
+    );
     assert_eq!(m.state(), ConsentState::Granted);
 }
 

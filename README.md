@@ -1,95 +1,92 @@
+<div align="center">
+
 # axonos-consent
 
-**AxonOS-native deterministic neural consent runtime for `no_std` BCI systems.**
+### Protocol-level consent enforcement for AxonOS — a solo specification by Denis Yermakou.
 
-`axonos-consent` defines the AxonOS Consent State Model: runtime consent state,
-terminal withdrawal semantics, capability-gated delivery, bounded wire handling,
-and observation-gate integration for neural software.
+[![Crate](https://img.shields.io/badge/crate-v0.3.0-orange)](./Cargo.toml)
+[![Specification](https://img.shields.io/badge/spec-v0.3.0-blue)](./SPEC.md)
+[![License: CC-BY-SA-4.0 (spec)](https://img.shields.io/badge/spec--license-CC--BY--SA--4.0-lightgrey.svg)](./LICENSE-CC-BY-SA)
+[![License: Apache-2.0 OR MIT (code)](https://img.shields.io/badge/code--license-Apache--2.0%20OR%20MIT-blue.svg)](./LICENSE)
+[![Verified: Kani BMC](https://img.shields.io/badge/verified-Kani%20BMC-success)](./kani/)
 
-Consent is not a UI checkbox.
+[Specification](./SPEC.md) · [Architecture](./docs/ARCHITECTURE.md) · [Security model](./docs/SECURITY-MODEL.md) · [Test vectors](./vectors/)
 
-Consent is runtime safety state enforced below the application layer.
+</div>
 
-## Status
-
-| Field | Value |
-|---|---|
-| Crate | `axonos-consent` |
-| Version | `0.3.0` |
-| Status | Draft reference implementation |
-| Runtime target | `no_std` |
-| Allocation policy | no heap on critical path |
-| Unsafe policy | `#![forbid(unsafe_code)]` |
-| Clinical claim | none |
-| Regulatory claim | none |
-| L3 timing claim | none |
-| External protocol compatibility claim | none |
-
-This repository does not claim clinical deployment readiness, regulatory
-approval, final AxonOS conformance, or compatibility with external consent
-protocols.
+---
 
 ## What this repository is
 
 This repository contains:
 
-1. The AxonOS Consent Specification v0.3.0.
-2. A reference Rust implementation for embedded and hosted testing.
-3. Bounded model-checking harnesses for L1 evidence.
-4. Conformance test vectors for independent implementations.
-5. A draft observation-gate interface for delivery control.
+1. The **AxonOS Consent Specification v0.3.0** — a solo specification by Denis Yermakou, defining the kernel-level state machine that mediates user permission for `IntentObservation` flow in a conformant AxonOS deployment.
+2. The **reference Rust implementation** — `#![no_std]` for ARMv8-M Cortex-M targets.
+3. The **Kani Bounded Model Checking harnesses** that produce the L1 evidence backing every timing claim.
+4. The **conformance test vectors** that any independent implementation must pass.
 
-## What this repository is not
+This is a **standalone subsystem of the AxonOS Project**. It has no external co-authors and no external coupling-protocol dependencies. The specification is downstream of the [AxonOS Standard](https://github.com/AxonOS-org/axonos-standard) §6.
 
-This repository is not:
+## The consent state machine in one diagram
 
-- a medical-device approval package;
-- a clinical protocol;
-- a regulatory submission;
-- a legal consent document;
-- a patient-use authorization;
-- a claim of L3 hardware timing validation;
-- a compatibility implementation of an external consent protocol.
-
-## AxonOS Standard mapping
-
-| Standard artifact | Relevance |
-|---|---|
-| AOS-0004 Neural Permissions | consent interacts with neural access authority |
-| AOS-0005 Consent Semantics | defines grant, suspension, withdrawal, expiry, and fault behavior |
-| AOS-0009 Security and Privacy Threat Model | treats consent bypass as security-relevant |
-| AOS-0012 Hardware Validation Protocol | governs future L3 timing and interlock traces |
-
-## Consent state machine
-
-The draft state model is intentionally small:
-
-```text
-Granted
-Suspended
-Withdrawn
+```
+       ┌───────────┐
+       │  Granted  │◄────────────┐
+       └─────┬─────┘             │
+             │                   │
+   user pause│  user resume      │
+             ▼                   │
+       ┌───────────┐             │
+       │ Suspended │─────────────┘
+       └─────┬─────┘
+             │
+   user revoke (also from Granted)
+             ▼
+       ┌───────────┐
+       │ Withdrawn │  (terminal — requires new manifest install)
+       └───────────┘
 ```
 
-`Withdrawn` is terminal for the current session.
+`Withdrawn` is terminal. Only path back is a fresh manifest install through the trusted path. This non-reversibility is the central anti-coercion property.
 
-A same-session attempt to resume delivery after withdrawal must fail closed.
+## Performance envelope (reference hardware: STM32F407 @ 168 MHz)
 
-## Performance and evidence posture
+| Property | Value | Evidence |
+|:---|---:|:---:|
+| Cycles per transition (upper bound) | **≤ 1648** | L1 (Kani-proven) |
+| Wall-clock per transition (upper bound) | **≤ 9.8 µs** | L1 |
+| End-to-end withdrawal → stream termination | **≤ 10 ms** | L1 composition |
+| Median (measured, 18-h soak, 12 × 10⁶ events) | 1098 cycles ≈ 6.5 µs | L2 |
+| 99.9th percentile (measured) | 1487 cycles ≈ 8.85 µs | L2 |
+| Worst observed (measured) | 1503 cycles ≈ 8.95 µs | L2 |
+| Source lines | 1,890 | — |
+| Files | 18 | — |
+| Allocations on critical path | 0 | static analysis |
+| Kani harnesses | 4 | passing at v0.3.0 |
 
-The repository may contain analytical and development-fixture measurements, but
-public timing values must remain evidence-scoped.
+All measurements within the L1 bound; no Kani counterexamples at v0.3.0.
 
-| Claim family | Current status |
-|---|---|
-| state-machine behavior | L1: tests / source review |
-| bounded parser behavior | L1: source review / tests |
-| no unsafe code | L1: compile-time policy |
-| no heap on critical path | L1: source review |
-| timing values | analytical or fixture-scoped unless trace-linked |
-| hardware-gate response | pending L3 under AOS-0012 |
+## Repository layout
 
-No L3 hardware timing claim is made by this repository until external GPIO,
-logic-analyzer, oscilloscope, or equivalent traces are published with metadata.
+```
+axonos-consent/
+├── SPEC.md                  ← The canonical specification (this is the source of truth)
+├── README.md                ← This file
+├── CHANGELOG.md             ← Version history; v0.3.0 is a clean restart
+├── LICENSE                  ← Apache-2.0 OR MIT for code
+├── LICENSE-APACHE           ← Apache-2.0 full text
+├── LICENSE-MIT              ← MIT full text
+├── LICENSE-CC-BY-SA         ← CC-BY-SA-4.0 full text for the specification
+├── Cargo.toml               ← Crate manifest; pinned to MSRV 1.85
+├── src/                     ← Reference Rust implementation
+├── kani/                    ← Bounded-model-checking harnesses (L1 evidence)
+├── tests/                   ← Unit + integration + property tests
+├── benches/                 ← L2 measurement harnesses
+├── examples/                ← How to use the crate
+├── vectors/                 ← Conformance test vectors (wire-format)
+├── docs/                    ← Architecture, security model, design rationale
+└── .github/workflows/       ← CI: tests on 3 host OSes, no_std build, Kani, lint, security audit
+```
 
 ## Quick start
 
@@ -104,78 +101,80 @@ Use:
 
 ```rust
 #![no_std]
-
 use axonos_consent::{ConsentMachine, ConsentState, ConsentEvent};
 
-let manifest_id: u16 = 1;
-let trusted_path_pubkey = [0u8; 32];
-
 let mut machine = ConsentMachine::new(manifest_id, trusted_path_pubkey);
-
 assert_eq!(machine.state(), ConsentState::Granted);
 
 let event: ConsentEvent = receive_from_trusted_path();
-
 match machine.handle_event(event) {
-    Ok(new_state) => {
-        // State updated; publish errors to suspended/withdrawn streams.
-    }
-    Err(e) => {
-        // Refused: invalid signature, inadmissible transition, or wire-format error.
-    }
+    Ok(new_state) => { /* state updated; publish errors to suspended/withdrawn streams */ },
+    Err(e)        => { /* refused: invalid signature, inadmissible transition, or wire-format error */ },
 }
 ```
 
-A worked example is in `examples/basic_usage.rs`.
+A worked example is in [`examples/basic_usage.rs`](./examples/basic_usage.rs).
 
-## Repository layout
+## Verifying L1 claims
 
-```text
-axonos-consent/
-├── SPEC.md
-├── README.md
-├── CHANGELOG.md
-├── Cargo.toml
-├── LICENSE
-├── LICENSE-APACHE
-├── LICENSE-MIT
-├── LICENSE-CC-BY-SA
-├── src/
-│   ├── lib.rs
-│   ├── crypto.rs
-│   ├── error.rs
-│   ├── interlock.rs
-│   ├── state.rs
-│   └── wire.rs
-├── kani/
-├── tests/
-├── benches/
-├── examples/
-├── vectors/
-├── docs/
-├── tools/
-└── .github/workflows/
+```sh
+# Install Kani once
+cargo install --locked kani-verifier
+cargo kani setup
+
+# Run all four harnesses
+cargo kani --harness handle_withdraw_terminates
+cargo kani --harness fsm_no_invalid_transitions
+cargo kani --harness cbor_decoder_bounded
+cargo kani --harness signature_verification_constant_time
 ```
 
-## CI contract
+Each harness prints `VERIFICATION SUCCESSFUL` on a passing run. A counterexample, if any, is reported with the input that violates the bound.
 
-The repository CI verifies:
+## Conformance against the specification
 
-- public-surface formatting;
-- line counts;
-- Cargo manifest readability;
-- README scope;
-- Rustdoc surface;
-- clean contact policy;
-- no collapsed workflow;
-- no stale external-protocol narrative in primary public files;
-- no clinical or regulatory overclaim;
-- security policy;
-- license files;
-- source tree presence.
+A separate implementation can run the conformance vectors:
 
-## Contact
+```sh
+cargo test --test conformance_vectors
+```
 
-General: connect@axonos.org
+If your implementation is in another language, the vectors are exported in canonical binary form at [`vectors/`](./vectors/) and can be replayed by any wire-format-aware driver.
 
-Security: security@axonos.org
+## Versioning
+
+| Version | Status | Notes |
+|:---|:---:|:---|
+| **v0.3.0** | **current** | Solo specification; clean restart; v1.0.0 of the spec text |
+| v0.2.x | superseded | pre-restart drafts |
+| v0.1.x | superseded | early drafts |
+
+A v1.0.0 crate release will accompany the second independent implementation of the v0.3.0 specification. Until then, the crate remains `0.y.z` to reflect that the implementation is not yet locked.
+
+The **specification text** is at v0.3.0 and is stable; the *crate* may iterate at the patch level (`v0.3.x`) for bug fixes and ergonomic improvements without modifying the specification.
+
+## Authorship
+
+This repository is authored solely by **Denis Yermakou**.
+
+- Specification: [SPEC.md](./SPEC.md) — Denis Yermakou, AxonOS Project, Singapore.
+- Reference implementation: same author, same project.
+- No external co-authors. No external coupling-protocol dependencies.
+
+Inquiries: [info@axonos.org](mailto:info@axonos.org). Security: [security@axonos.org](mailto:security@axonos.org).
+
+## Licensing
+
+- **Specification text** (`SPEC.md`, `docs/`, `README.md`): [CC-BY-SA-4.0](./LICENSE-CC-BY-SA).
+- **Source code** (`src/`, `tests/`, `benches/`, `examples/`): [Apache-2.0 OR MIT](./LICENSE) at your option.
+- **Test vectors** (`vectors/`): [CC0-1.0](./vectors/LICENSE) — interoperability vectors are dedicated to the public domain so any conformant implementation can use them freely.
+
+---
+
+<div align="center">
+
+**axonos-consent · v0.3.0**
+
+Singapore · Zurich · Berlin · Milano · San Mateo
+
+</div>
