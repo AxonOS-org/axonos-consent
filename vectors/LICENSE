@@ -1,0 +1,20 @@
+Creative Commons CC0 1.0 Universal
+
+To the extent possible under law, Denis Yermakou has waived all copyright and
+related or neighboring rights to the conformance test vectors in this directory.
+
+This work is published from: Singapore.
+
+For canonical text: https://creativecommons.org/publicdomain/zero/1.0/
+
+SPDX-License-Identifier: CC0-1.0
+
+============================================================================
+
+These vectors are dedicated to the public domain so that any implementation —
+whether commercial, academic, derivative, or otherwise — may use them without
+attribution and without any compatibility concerns with their own license.
+
+The specification text in SPEC.md remains under CC-BY-SA-4.0; only the
+test-vector binaries and their `.expected.json` siblings in this directory
+are dedicated to the public domain.

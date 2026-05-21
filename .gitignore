@@ -1,3 +1,7 @@
 /target
-/fuzz/target
-/fuzz/corpus
+Cargo.lock
+*.bk
+.vscode/
+.idea/
+*.swp
+.DS_Store

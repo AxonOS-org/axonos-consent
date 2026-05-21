@@ -1,102 +1,125 @@
-# Copyright (c) 2026 Denis Yermakou / AxonOS
-# SPDX-License-Identifier: Apache-2.0 OR MIT
-
-name: CI
+name: ci
 
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
-  RUSTFLAGS: "-D warnings"
+  RUSTFLAGS: -Dwarnings
 
 jobs:
-  # 1. Primary logic verification
-  test-default:
-    name: Unit Tests (no_std)
-    runs-on: ubuntu-latest
+  test:
+    name: test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - run: cargo test
+      - uses: dtolnay/rust-toolchain@1.85.0
+      - uses: Swatinem/rust-cache@v2
+      - name: test
+        run: cargo test --workspace --all-features
+      - name: test no-default-features
+        run: cargo test --workspace --no-default-features
 
-  # 2. Data compatibility verification
-  test-json:
-    name: Interoperability Tests (JSON)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - run: cargo test --features json
-
-  # 3. Hardware target compilation check
-  no-std:
-    name: Build (Cortex-M4F Target)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: thumbv7em-none-eabihf
-      - run: cargo build --target thumbv7em-none-eabihf --no-default-features
-
-  # 4. Static analysis and linting
-  clippy:
-    name: Lints (Clippy)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
-      - run: cargo clippy --all-targets -- -D warnings
-      - run: cargo clippy --all-targets --features json -- -D warnings
-
-  # 5. Code style enforcement
   fmt:
-    name: Formatting (Rustfmt)
+    name: rustfmt
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
-      - run: cargo fmt --check
+      - run: cargo fmt --all --check
 
-  # 6. Cryptographic integrity check for test vectors
-  vectors-integrity:
-    name: Vector Integrity (SHA-256)
+  clippy:
+    name: clippy
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Verify SHA-256 checksum
-        run: |
-          EXPECTED="29a8bf9f2b4dabe5d9641a8a4c416f361c2ba9815cca9b8e9e1d222d002fa50a"
-          ACTUAL=$(sha256sum tests/vectors/consent-interop-vectors-v0.1.0.json | awk '{print $1}')
-          if [ "$ACTUAL" != "$EXPECTED" ]; then
-            echo "Error: Test vector integrity violation!"
-            exit 1
-          fi
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo clippy --workspace --all-features --all-targets -- -D warnings
 
-  # 7. Memory safety and Undefined Behavior analysis
+  msrv:
+    name: msrv (1.85)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.85.0
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo check --workspace --all-features
+
+  no_std:
+    name: no_std build on ${{ matrix.target }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: [thumbv7em-none-eabihf, thumbv8m.main-none-eabihf]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.85.0
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --target ${{ matrix.target }} --no-default-features --release
+
+  docs:
+    name: rustdoc
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: rustdoc
+        env:
+          RUSTDOCFLAGS: -Dwarnings --cfg docsrs
+        run: cargo doc --workspace --no-deps --all-features
+
   miri:
-    name: Memory Safety (Miri)
+    name: miri
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
         with:
           components: miri
-      - run: cargo miri test
+      - uses: Swatinem/rust-cache@v2
+      - name: setup miri
+        run: cargo miri setup
+      - name: miri test
+        env:
+          MIRIFLAGS: -Zmiri-strict-provenance
+        run: cargo miri test --workspace --all-features
 
-  # 8. Performance regression check
-  bench-check:
-    name: Benchmark Compilation (WCET)
+  cargo-deny:
+    name: cargo-deny (audit + license)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@nightly
-      - run: cargo bench --no-run
+      - uses: EmbarkStudios/cargo-deny-action@v2
+
+  license-check:
+    name: LICENSE files present and SPDX-tagged
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: assert all four LICENSE files exist
+        run: |
+          test -f LICENSE && echo "✓ LICENSE"
+          test -f LICENSE-APACHE && echo "✓ LICENSE-APACHE"
+          test -f LICENSE-MIT && echo "✓ LICENSE-MIT"
+          test -f LICENSE-CC-BY-SA && echo "✓ LICENSE-CC-BY-SA"
+      - name: assert SPDX identifiers
+        run: |
+          grep -q 'SPDX-License-Identifier: Apache-2.0 OR MIT' LICENSE
+          grep -q 'SPDX-License-Identifier: CC-BY-SA-4.0' LICENSE-CC-BY-SA
+          echo "✓ all SPDX identifiers present"

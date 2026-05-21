@@ -1,41 +1,68 @@
 [package]
 name = "axonos-consent"
-version = "0.2.2"
+version = "0.3.0"
 edition = "2021"
-rust-version = "1.75"
-authors = ["Denis Yermakou <axonosorg@gmail.com>"]
-description = "The Rust reference implementation of the MMP Consent Extension v0.1.0 (specification authored by SYM.BOT, CC-BY-4.0). Deterministic consent enforcement for BCI applications. no_std, zero-allocation, bounded WCET. Targets MMP v0.2.3."
-license = "Apache-2.0 OR MIT"
+rust-version = "1.85"
+authors = ["Denis Yermakou <info@axonos.org>"]
+description = "Protocol-level consent enforcement for AxonOS — kernel-level state machine, formally bounded, #![no_std]."
+documentation = "https://docs.rs/axonos-consent"
 repository = "https://github.com/AxonOS-org/axonos-consent"
 homepage = "https://axonos.org"
-documentation = "https://docs.rs/axonos-consent"
+license = "Apache-2.0 OR MIT"
 readme = "README.md"
-keywords = ["bci", "consent", "mmp", "real-time", "no-std"]
-categories = ["embedded", "no-std", "hardware-support", "science"]
-
+keywords = ["bci", "consent", "real-time", "no-std", "embedded"]
+categories = ["embedded", "no-std", "cryptography", "data-structures"]
 include = [
-    "src/**/*.rs",
+    "src/**/*",
     "Cargo.toml",
     "README.md",
+    "SPEC.md",
+    "CHANGELOG.md",
+    "LICENSE",
     "LICENSE-APACHE",
     "LICENSE-MIT",
-    "CHANGELOG.md",
+    "LICENSE-CC-BY-SA",
 ]
+
+[lib]
+name = "axonos_consent"
+path = "src/lib.rs"
 
 [features]
 default = []
-alloc = []
-json = ["alloc", "dep:serde_json"]
-std = ["json"]
-stim-guard = []
+std = []
+# Property-based testing requires std
+proptest = ["dep:proptest", "std"]
 
 [dependencies]
-serde_json = { version = "1.0", optional = true }
+# Core dependencies (all no_std-compatible)
+
+# Property-based testing dependency (gated)
+[dependencies.proptest]
+version = "1.4"
+optional = true
+default-features = false
+features = ["alloc"]
 
 [dev-dependencies]
-serde_json = "1.0"
+proptest = { version = "1.4", default-features = false, features = ["alloc"] }
+
+[profile.release]
+codegen-units = 1
+lto = "fat"
+opt-level = "z"      # size-optimised for embedded targets
+debug = false
+strip = true
+panic = "abort"
+
+[profile.dev]
+opt-level = 0
+debug = true
+overflow-checks = true
 
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
-targets = ["x86_64-unknown-linux-gnu", "thumbv7em-none-eabihf"]
+
+[badges]
+maintenance = { status = "actively-developed" }

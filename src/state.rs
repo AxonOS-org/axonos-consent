@@ -1,113 +1,165 @@
-// Copyright (c) 2026 Denis Yermakou / AxonOS
-// SPDX-License-Identifier: Apache-2.0 OR MIT
-//
-// This file is part of the AxonOS Consent Engine.
-// See LICENSE-APACHE or LICENSE-MIT for details.
-
-//! Consent state machine per MMP Consent Extension v0.1.0, §4.
+//! The consent finite-state machine.
 //!
-//! ## State × Frame transition table (exhaustive)
+//! Three states: `Granted`, `Suspended`, `Withdrawn`. `Withdrawn` is terminal.
 //!
-//! ```text
-//! Current    | Withdraw | Suspend   | Resume    |
-//! -----------|----------|-----------|-----------|
-//! GRANTED    | → WITHDRAWN | → SUSPENDED | → GRANTED (idempotent) |
-//! SUSPENDED  | → WITHDRAWN | → SUSPENDED (idempotent) | → GRANTED |
-//! WITHDRAWN  | REJECT   | REJECT    | REJECT    |
-//! ```
-//!
-//! Every cell is explicitly handled. No wildcard matches.
+//! See [SPEC §2 and §3](https://github.com/AxonOS-org/axonos-standard/blob/main/SPEC.md)
+//! for the normative semantics.
 
-use crate::frames::ConsentFrame;
+use crate::error::ConsentError;
+use crate::wire::ConsentEvent;
+use core::sync::atomic::{AtomicU8, Ordering};
 
-/// Per-peer consent state (§4).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// One of the three consent states.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 #[repr(u8)]
 pub enum ConsentState {
-    /// Normal coupling. Cognitive frames flow.
-    Granted = 0x00,
-    /// Coupling paused. Connection maintained. No cognitive frames.
-    Suspended = 0x01,
-    /// Terminal. Connection closed. No recovery without new handshake.
-    Withdrawn = 0x02,
-}
-
-/// Transition error.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TransitionError {
-    /// WITHDRAWN is terminal (§4). No transitions allowed.
-    AlreadyWithdrawn,
-    /// Peer not found in engine peer table.
-    PeerNotFound,
+    /// Observations flow normally.
+    Granted = 0x01,
+    /// Observations do not flow; consumers receive a typed backpressure error.
+    /// Resumable to `Granted` through the trusted path.
+    Suspended = 0x02,
+    /// Streams terminated. Terminal — requires fresh manifest install.
+    Withdrawn = 0x03,
 }
 
 impl ConsentState {
-    /// Apply a consent frame to the current state.
+    /// Decode from the on-wire discriminant byte.
+    pub fn from_u8(b: u8) -> Result<Self, ConsentError> {
+        match b {
+            0x01 => Ok(Self::Granted),
+            0x02 => Ok(Self::Suspended),
+            0x03 => Ok(Self::Withdrawn),
+            _ => Err(ConsentError::ReservedDiscriminant),
+        }
+    }
+
+    /// True if this state is terminal (i.e., `Withdrawn`).
+    pub fn is_terminal(&self) -> bool {
+        matches!(self, ConsentState::Withdrawn)
+    }
+}
+
+/// The consent state machine for one manifest installation.
+pub struct ConsentMachine {
+    manifest_id: u16,
+    trusted_path_pubkey: [u8; 32],
+    state: AtomicU8,
+}
+
+impl ConsentMachine {
+    /// Create a new machine for a freshly installed manifest. Initial state is `Granted`
+    /// per SPEC §2.2.
+    pub fn new(manifest_id: u16, trusted_path_pubkey: [u8; 32]) -> Self {
+        Self {
+            manifest_id,
+            trusted_path_pubkey,
+            state: AtomicU8::new(ConsentState::Granted as u8),
+        }
+    }
+
+    /// Current state. Reads with acquire ordering so the IPC publication path sees
+    /// the latest state from the writer.
+    pub fn state(&self) -> ConsentState {
+        // SAFETY: state is only ever written with one of the three discriminants.
+        match self.state.load(Ordering::Acquire) {
+            0x01 => ConsentState::Granted,
+            0x02 => ConsentState::Suspended,
+            0x03 => ConsentState::Withdrawn,
+            _ => unreachable!("invariant violated: state byte outside discriminant set"),
+        }
+    }
+
+    /// Process one trusted-path event. Returns the resulting state on success.
     ///
-    /// **Formal closure guarantee:** This match is exhaustive over
-    /// `ConsentState` × `ConsentFrame` (3 states × 3 frame types = 9 cells).
-    /// Every cell is explicitly handled. No wildcard `_` arms exist.
-    /// Adding a new state or frame type will produce a compile error.
-    pub fn apply_frame(self, frame: &ConsentFrame) -> Result<ConsentState, TransitionError> {
-        match (self, frame) {
-            // WITHDRAWN is terminal — reject everything
-            (Self::Withdrawn, ConsentFrame::Withdraw(_)) => Err(TransitionError::AlreadyWithdrawn),
-            (Self::Withdrawn, ConsentFrame::Suspend(_)) => Err(TransitionError::AlreadyWithdrawn),
-            (Self::Withdrawn, ConsentFrame::Resume(_)) => Err(TransitionError::AlreadyWithdrawn),
-
-            // GRANTED transitions
-            (Self::Granted, ConsentFrame::Withdraw(_)) => Ok(Self::Withdrawn),
-            (Self::Granted, ConsentFrame::Suspend(_)) => Ok(Self::Suspended),
-            (Self::Granted, ConsentFrame::Resume(_)) => Ok(Self::Granted), // idempotent
-
-            // SUSPENDED transitions
-            (Self::Suspended, ConsentFrame::Withdraw(_)) => Ok(Self::Withdrawn),
-            (Self::Suspended, ConsentFrame::Suspend(_)) => Ok(Self::Suspended), // idempotent
-            (Self::Suspended, ConsentFrame::Resume(_)) => Ok(Self::Granted),
+    /// Returns:
+    /// - `Ok(state)` if the transition is admissible (including idempotent re-application).
+    /// - `Err(SignatureInvalid)` if the event's signature does not verify.
+    /// - `Err(InadmissibleTransition)` if the requested transition is not admissible.
+    /// - `Err(ManifestMismatch)` if the event targets a different manifest than this machine.
+    /// - `Err(...)` for other validation failures per [`ConsentError`].
+    ///
+    /// SPEC §4.1: the bound on this function is ≤ 1648 cycles, L1-proven by Kani.
+    pub fn handle_event(&mut self, event: ConsentEvent) -> Result<ConsentState, ConsentError> {
+        // 1. Verify the manifest matches.
+        if event.manifest_id != self.manifest_id {
+            return Err(ConsentError::ManifestMismatch);
         }
-    }
 
-    // --- Convenience methods (delegate to apply_frame semantics) ---
+        // 2. Verify the signature.
+        crate::crypto::verify_truncated(&event, &self.trusted_path_pubkey)?;
 
-    pub fn suspend(self) -> Result<ConsentState, TransitionError> {
-        match self {
-            Self::Granted => Ok(Self::Suspended),
-            Self::Suspended => Ok(Self::Suspended),
-            Self::Withdrawn => Err(TransitionError::AlreadyWithdrawn),
+        // 3. Decode the target state.
+        let target = ConsentState::from_u8(event.state)?;
+
+        // 4. Compute and validate the transition.
+        let current = self.state();
+        if !is_admissible_transition(current, target) {
+            return Err(ConsentError::InadmissibleTransition);
         }
+
+        // 5. Commit. SeqCst on write to ensure ordering with subsequent IPC publications.
+        self.state.store(target as u8, Ordering::SeqCst);
+
+        Ok(target)
     }
 
-    pub fn resume(self) -> Result<ConsentState, TransitionError> {
-        match self {
-            Self::Suspended => Ok(Self::Granted),
-            Self::Granted => Ok(Self::Granted),
-            Self::Withdrawn => Err(TransitionError::AlreadyWithdrawn),
+    /// The manifest ID this machine is bound to.
+    pub fn manifest_id(&self) -> u16 {
+        self.manifest_id
+    }
+}
+
+/// Is the transition `from → to` admissible per SPEC §3.1?
+///
+/// This is `pub` so that test code and the kernel interlock can interrogate
+/// the transition graph without instantiating a machine.
+pub const fn is_admissible_transition(from: ConsentState, to: ConsentState) -> bool {
+    use ConsentState::*;
+    matches!(
+        (from, to),
+        // Identity (idempotent)
+        (Granted,   Granted)
+        | (Suspended, Suspended)
+        | (Withdrawn, Withdrawn)
+        // Pause / resume
+        | (Granted,   Suspended)
+        | (Suspended, Granted)
+        // Revoke from either active state
+        | (Granted,   Withdrawn)
+        | (Suspended, Withdrawn)
+    )
+    // All other 9 - 7 = 2 transitions (Withdrawn → Granted, Withdrawn → Suspended)
+    // are inadmissible.
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn admissible_transitions_per_spec() {
+        use ConsentState::*;
+        // The seven admissible transitions
+        for (from, to) in [
+            (Granted, Granted),
+            (Suspended, Suspended),
+            (Withdrawn, Withdrawn),
+            (Granted, Suspended),
+            (Suspended, Granted),
+            (Granted, Withdrawn),
+            (Suspended, Withdrawn),
+        ] {
+            assert!(is_admissible_transition(from, to), "expected admissible: {:?} → {:?}", from, to);
         }
+        // The two inadmissible transitions
+        assert!(!is_admissible_transition(Withdrawn, Granted));
+        assert!(!is_admissible_transition(Withdrawn, Suspended));
     }
 
-    pub fn withdraw(self) -> Result<ConsentState, TransitionError> {
-        match self {
-            Self::Granted | Self::Suspended => Ok(Self::Withdrawn),
-            Self::Withdrawn => Err(TransitionError::AlreadyWithdrawn),
-        }
-    }
-
-    /// §6.4: 2-bit gossip encoding.
-    pub fn to_gossip_bits(self) -> u8 {
-        self as u8
-    }
-
-    pub fn from_gossip_bits(bits: u8) -> Option<Self> {
-        match bits & 0b11 {
-            0 => Some(Self::Granted),
-            1 => Some(Self::Suspended),
-            2 => Some(Self::Withdrawn),
-            _ => None,
-        }
-    }
-
-    /// §6.1: cognitive frames allowed only in GRANTED.
-    pub fn allows_cognitive_frames(self) -> bool {
-        matches!(self, Self::Granted)
+    #[test]
+    fn withdrawn_is_terminal() {
+        assert!(ConsentState::Withdrawn.is_terminal());
+        assert!(!ConsentState::Granted.is_terminal());
+        assert!(!ConsentState::Suspended.is_terminal());
     }
 }

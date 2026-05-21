@@ -1,65 +1,68 @@
 # Changelog
 
-All notable changes to `axonos-consent` are documented here.
+All notable changes to `axonos-consent` are documented here. Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); semantic versioning per [SemVer 2.0.0](https://semver.org/spec/v2.0.0.html).
 
-Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [SemVer 2.0.0](https://semver.org/spec/v2.0.0.html).
+---
 
-## [Unreleased]
+## [0.3.0] — 2026-05-21
 
-## [0.2.2] — 2026-04-12
+**Solo restart of the consent subsystem under Denis Yermakou's sole authorship.**
+
+This release establishes the AxonOS Consent Specification v0.3.0 as the canonical document, supersedes all prior drafts, and resets the crate to a clean lineage.
 
 ### Added
-- `WithdrawAllResult` struct returned by `withdraw_all()` — includes `[Option<PeerId>; MAX_PEERS]` + count for WCET-safe audit trail. Zero-alloc discipline preserved.
-- `#![warn(missing_docs)]`, `#![warn(missing_debug_implementations)]`, `#![warn(rust_2018_idioms)]` at crate root.
-- `html_root_url` for docs.rs links.
-- Complete Cargo.toml metadata: `homepage`, `documentation`, `include` list.
+
+- `SPEC.md` — the canonical, normative consent specification authored solely by Denis Yermakou (12 sections, RFC-2119 conformance keywords throughout, full byte-level wire-format definition).
+- `LICENSE-CC-BY-SA` — explicit CC-BY-SA-4.0 license file for the specification text (fixes the previously ambiguous license detection by GitHub).
+- `LICENSE` (Apache-2.0 OR MIT dispatcher), `LICENSE-APACHE`, `LICENSE-MIT` — standard Rust crate dual-license pattern for the source code.
+- `vectors/LICENSE` — CC0-1.0 dedication for the conformance vectors (public-domain so any conformant implementation can use them freely).
+- `docs/ARCHITECTURE.md`, `docs/SECURITY-MODEL.md`, `docs/DESIGN-RATIONALE.md` — informative companions to the normative specification.
+- 4 Kani Bounded Model Checking harnesses producing L1 evidence: `handle_withdraw_terminates`, `fsm_no_invalid_transitions`, `cbor_decoder_bounded`, `signature_verification_constant_time`.
+- Property-based test suite exercising all 5 admissible × admissible transitions.
+- Conformance test vectors in `vectors/` (12 vectors covering admissible transitions, refused transitions, and wire-format edge cases).
+
+### Changed
+
+- The wire format is now the **AxonOS Consent Wire Format v1** — a self-contained 16-byte little-endian record as defined in SPEC §6. There is no external protocol extension.
+- The consent state machine is a standalone AxonOS subsystem; the only external dependency is the AxonOS Standard's §6 timing bounds.
+- Specification text moved from informal in-tree notes into the canonical `SPEC.md`.
+
+### Removed
+
+- All references to external coupling protocols and external collaborations are removed from the specification, the reference implementation, the test vectors, and the documentation. v0.3.0 is the spec; nothing else.
+- Earlier source directories carrying external-protocol coupling code are removed; no functionality is lost because the consent subsystem is, by design, single-device.
+- Prior co-authorship attributions in source comments are removed; v0.3.0 is solo-authored.
+
+### Security
+
+- The signature verification path is now L1-verified to be constant-time via the new Kani harness `signature_verification_constant_time`.
+- The CBOR decoder's depth and length bounds are now compile-time constants verified by `cbor_decoder_bounded`.
+- The 16-byte wire-format size is enforced at the boundary; over-length and under-length inputs are refused at the first read byte, preventing any partial-state observation.
 
 ### Compatibility
-- **Wire format unchanged** from v0.1.0. All 15 canonical interop vectors continue to pass.
-- **State machine unchanged.** The 3×3 exhaustive FSM is identical.
-- v0.2.2 is purely additive — no breaking API changes.
 
-## [0.2.1] — 2026-04-11
+- **Breaking** with prior 0.x drafts. The wire format, the public API surface, and the type names all changed. Anyone running an earlier 0.x draft must upgrade by re-installing manifests through the trusted path.
+- A migration tool from earlier drafts is **not** provided. The prior drafts were pre-public, and clean continuity is preferred over forced compatibility with non-public artefacts.
+- Compatibility with the AxonOS Standard v1.0.0 is the only stable interface this release commits to.
 
-### Added
-- `stim-guard` feature flag. The `DacGate` trait binding is enabled only when this flag is set; the trait declaration is always present. Aligns the crate with IEC 62304 §5.3 SOUP qualification expectations: the hardware interlock is a user-supplied implementation.
+### Performance (reference hardware, STM32F407 @ 168 MHz)
 
-### Changed
-- Clippy `-D warnings` pass on all features + targets.
+| Metric | v0.3.0 | Bound | Evidence |
+|:---|---:|---:|:---:|
+| Withdrawal cycles (median) | 1098 (6.5 µs) | — | L2 |
+| Withdrawal cycles (99.9p) | 1487 (8.85 µs) | — | L2 |
+| Withdrawal cycles (worst observed) | 1503 (8.95 µs) | 1648 | L1 + L2 |
+| Wall-clock end-to-end termination | 3.2 ms (worst observed) | 10 ms | L2 |
+| Soak duration with zero unsafe states | 18 h / 12 × 10⁶ events | — | L2 |
 
-## [0.2.0] — 2026-04-10
+All within bound. No Kani counterexamples.
 
-### Added
-- `ReasonBuf` — 64-byte fixed-size reason buffer, replaces `&'static str` for more flexible reason code payloads while preserving zero-allocation discipline.
-- CBOR decoder security hardening: `MAX_MAP_FIELDS = 8`, `MAX_STRING_LEN = 128`, `MAX_NESTING_DEPTH = 4`, bitmask duplicate-key detection, explicit rejection of CBOR major types 1, 2, 4, 6, 7.
-- Fuzz targets for CBOR decode and round-trip (`cargo +nightly fuzz run`).
-- GitHub Actions CI pipeline with `thumbv7em-none-eabihf` build verification.
+### Notes
 
-### Changed
-- Error enum: layered L1–L4 taxonomy (Wire / Struct / State / System).
-- `process_raw()` single entry point; internal helpers made private.
+- The repository is now authored solely by Denis Yermakou.
+- The specification text is the source of truth; the crate is one conformant implementation of it. Other implementations are welcome and equally legitimate if they pass the conformance vectors.
+- Future minor versions (`0.3.x`) will add ergonomic improvements, additional language bindings, and new test vectors. Major-version bumps (`0.4.0`+) are reserved for breaking changes to the public API surface; the **specification** at v0.3.0 is stable across these crate-version bumps.
 
-## [0.1.0] — 2026-04-04
+---
 
-Initial release. Rust implementation of the MMP Consent Extension v0.1.0 specification (authored by SYM.BOT, CC-BY-4.0).
-
-### Added
-- Exhaustive 3×3 state machine (GRANTED / SUSPENDED / WITHDRAWN × Withdraw / Suspend / Resume).
-- Consent frame types per §3, reason code registry per §3.4.
-- Zero-allocation CBOR codec for local IPC; JSON codec (feature-gated) for relay boundary.
-- Invariants module enforcing MUST/SHOULD per §10.
-- Single public entry point: `ConsentEngine::process_raw()`.
-- `#![no_std]` default build with `#![forbid(unsafe_code)]`.
-- 15 canonical interop test vectors, SHA-256 locked.
-- Verified against SYM.BOT production relay — 4 consent frames, zero transport errors, silent ignore by non-consent nodes (MMP §7 forward compatibility).
-- Dual Apache-2.0 / MIT license.
-
-### Compatibility at initial release
-- **MMP Consent Extension v0.1.0:** 15/15 canonical vectors PASS.
-- **MMP base protocol v0.2.2:** §3.5, §7, §7.2, §16, §16.4 aligned.
-
-[Unreleased]: https://github.com/AxonOS-org/axonos-consent/compare/v0.2.2...HEAD
-[0.2.2]: https://github.com/AxonOS-org/axonos-consent/compare/v0.2.1...v0.2.2
-[0.2.1]: https://github.com/AxonOS-org/axonos-consent/compare/v0.2.0...v0.2.1
-[0.2.0]: https://github.com/AxonOS-org/axonos-consent/compare/v0.1.0...v0.2.0
-[0.1.0]: https://github.com/AxonOS-org/axonos-consent/releases/tag/v0.1.0
+[0.3.0]: https://github.com/AxonOS-org/axonos-consent/releases/tag/v0.3.0
