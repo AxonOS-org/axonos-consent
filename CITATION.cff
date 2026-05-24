@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+title: "AxonOS Consent"
+message: >-
+  If you reference or build against this component of the AxonOS
+  project, please cite it using the metadata below. The canonical
+  specification is the axonos-standard repository.
+type: software
+authors:
+  - given-names: Denis
+    family-names: Yermakou
+    affiliation: "AxonOS Project"
+repository-code: "https://github.com/AxonOS-org/axonos-consent"
+url: "https://axonos.org"
+abstract: >-
+  Protocol-level consent enforcement for AxonOS: a #![no_std] Rust reference crate implementing the consent finite-state machine and the neural-permission model.
+keywords:
+  - brain-computer interface
+  - real-time systems
+  - operating system
+  - neurotechnology
+  - rust
+license: [Apache-2.0, MIT]
+version: "0.3.0"
