@@ -4,6 +4,34 @@ All notable changes to `axonos-consent` are documented here. Format based on [Ke
 
 ---
 
+## [0.4.0] — 2026-05-27
+
+**Verification release. The consent protocol is unchanged from v0.3.0; this release strengthens the evidence base.**
+
+This release adds a coverage-guided fuzz suite to the reference implementation. It changes no protocol semantics: the three-state FSM, the five admissible transitions, the 16-byte wire format, and the timing bounds are byte-for-byte identical to v0.3.0. An implementation conformant with v0.3.0 is conformant with v0.4.0 without modification.
+
+### Added
+
+- `fuzz/` — a coverage-guided fuzz suite built on `cargo-fuzz` / libFuzzer, as a separate non-published crate. Three targets:
+  - `wire_decode` — totality of the SPEC §6 wire-format decoder under arbitrary input (never panics, never reads out of bounds).
+  - `roundtrip` — canonical-encoding symmetry of the SPEC §6 wire format (no two buffers denote one event).
+  - `fsm_sequence` — the SPEC §2–§3 state-machine invariants under arbitrary streams of correctly-signed events (no panic, every stored state valid, `Withdrawn` terminal, every accepted transition admissible).
+- `fuzz/README.md` — how to build, run, and triage the fuzz targets.
+- `fuzz/corpus/` — a committed seed corpus for all three targets.
+- `SPEC.md` §10.3 — "Fuzz and differential testing" — documenting the fuzz suite as L2-class evidence alongside the L1 Kani harnesses.
+- A `fuzz` CI job — nightly toolchain; builds all three targets and smoke-runs each for 60 s on every push and pull request. A discovered crash fails the build.
+
+### Changed
+
+- `SPEC.md` bumped to v0.4.0. The bump reflects the new informative §10.3 only; the normative protocol is byte-identical to v0.3.0.
+- Crate version `0.3.0` → `0.4.0`; `SPEC_VERSION` in `src/lib.rs` updated accordingly.
+
+### Notes
+
+- No breaking changes. No wire-format change. No new runtime dependency — the crate remains zero-dependency; the fuzz suite is a separate crate that is never published.
+
+---
+
 ## [0.3.0] — 2026-05-21
 
 **Solo restart of the consent subsystem under Denis Yermakou's sole authorship.**

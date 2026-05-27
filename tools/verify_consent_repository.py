@@ -95,7 +95,7 @@ def check_cargo_manifest() -> None:
     for token in [
         "[package]",
         'name = "axonos-consent"',
-        'version = "0.3.0"',
+        'version = "0.4.0"',
         'edition = "2021"',
         'license = "Apache-2.0 OR MIT"',
         "[features]",

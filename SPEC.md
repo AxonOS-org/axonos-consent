@@ -1,6 +1,6 @@
 # AxonOS Consent Specification
 
-**Version 0.3.0** · 2026-05-21 · Normative
+**Version 0.4.0** · 2026-05-27 · Normative
 
 **Author:** Denis Yermakou
 **Project:** AxonOS
@@ -18,6 +18,8 @@ The specification is downstream of [the AxonOS Standard](https://github.com/Axon
 This specification supersedes all prior drafts of consent semantics circulated in earlier internal documents, article series, or pre-public manuscripts. References in those documents to external coupling protocols, mesh extensions, or third-party collaborations are **not** part of this specification and are not normative for any conformant AxonOS Consent implementation.
 
 The reference implementation is the `axonos-consent` crate at the version tagged in [`Cargo.toml`](./Cargo.toml).
+
+Version 0.4.0 is editorially identical to v0.3.0 in protocol terms. The three-state machine, the five admissible transitions, the wire format, the timing bounds, and the cryptographic requirements are byte-for-byte unchanged. v0.4.0 differs from v0.3.0 only by the addition of the informative §10.3, which records the fuzz and differential-testing evidence for the reference implementation. An implementation conformant with v0.3.0 is conformant with v0.4.0 without modification.
 
 ---
 
@@ -363,7 +365,7 @@ The reference implementation achieves this by writing the new state under `Order
 
 ### 10.1 Conformance criteria
 
-An implementation is **conformant with AxonOS Consent v0.3.0** if, and only if, it satisfies all of:
+An implementation is **conformant with AxonOS Consent v0.4.0** if, and only if, it satisfies all of:
 
 1. Models consent as the three-state FSM of §2.
 2. Admits exactly the five transitions of §3.1 and refuses all others.
@@ -386,6 +388,19 @@ A set of canonical wire-format vectors is published in [`vectors/`](./vectors/).
 - Signature-failure cases.
 
 A conformant implementation **MUST** produce the documented response for each vector.
+
+
+### 10.3 Fuzz and differential testing (informative)
+
+The reference implementation is exercised by a coverage-guided fuzz suite (`fuzz/`, built on libFuzzer through `cargo-fuzz`). Three targets search for inputs that would violate this specification:
+
+- **`wire_decode`** drives §6 wire-format decoding with arbitrary byte buffers and asserts that the decoder is *total* — every input yields either an accepted event or a typed refusal, and never a panic or an out-of-bounds read.
+- **`roundtrip`** asserts that the §6 encoding is *canonical* — every accepted 16-byte buffer re-encodes to itself, so no two distinct buffers denote one consent event.
+- **`fsm_sequence`** drives the §2–§3 state machine with arbitrary streams of correctly-signed events and asserts the four machine invariants: no panic, every stored state valid, `Withdrawn` terminal per §3.3, and every accepted transition admissible per §3.1.
+
+Fuzzing complements, and does not replace, the bounded-model-checking harnesses. The Kani harnesses are **L1 evidence** — an exhaustive proof over a bounded input space. The fuzz suite is **L2-class evidence** — a large, coverage-guided sample of the unbounded input space. The two are run together: the harnesses prove the bounded core, the fuzz suite searches the remainder. The fuzz suite is executed in continuous integration on every change; a discovered crash fails the build and is treated as a specification or implementation defect.
+
+This subsection is informative. It describes the evidence held for the reference implementation; it does not add a conformance obligation on independent implementations beyond those of §10.1.
 
 ---
 
@@ -428,6 +443,7 @@ The consent system's trust anchor is the **kernel** and the **trusted-path publi
 ### 12.2 Informative
 
 - **[Kani]** Kani Verification Project. https://model-checking.github.io/kani/
+- **[cargo-fuzz]** Rust Fuzzing Authority. *cargo-fuzz: a `cargo` subcommand for fuzzing with libFuzzer.* https://github.com/rust-fuzz/cargo-fuzz
 - **[ATECC608B]** Microchip Technology Inc. *ATECC608B CryptoAuthentication Device Datasheet.*
 - **[TrustZone-M]** ARM Limited. *ARMv8-M Architecture Reference Manual* — TrustZone-M chapter.
 - **[Capabilities]** Dennis, J. B. & Van Horn, E. C. *Programming Semantics for Multiprogrammed Computations.* CACM 9(3):143–155, 1966.
@@ -445,7 +461,7 @@ This is a solo specification of the AxonOS Project. There are no external co-aut
 
 Cite as:
 
-> Yermakou, D. (2026). *AxonOS Consent Specification, version 0.3.0.* AxonOS Project, Singapore. CC-BY-SA-4.0. https://github.com/AxonOS-org/axonos-consent
+> Yermakou, D. (2026). *AxonOS Consent Specification, version 0.4.0.* AxonOS Project, Singapore. CC-BY-SA-4.0. https://github.com/AxonOS-org/axonos-consent
 
 A BibTeX entry is available in [`docs/citation.bib`](./docs/citation.bib).
 

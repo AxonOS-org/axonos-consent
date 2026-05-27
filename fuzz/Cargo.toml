@@ -1,0 +1,40 @@
+[package]
+name = "axonos-consent-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+[dependencies.axonos-consent]
+path = ".."
+
+# Each target is a separate libFuzzer binary.
+[[bin]]
+name = "wire_decode"
+path = "fuzz_targets/wire_decode.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "roundtrip"
+path = "fuzz_targets/roundtrip.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fsm_sequence"
+path = "fuzz_targets/fsm_sequence.rs"
+test = false
+doc = false
+bench = false
+
+# Empty table: detaches fuzz/ into its own workspace so it is not pulled
+# into the parent crate's build graph. The parent crate stays zero-dependency.
+[workspace]

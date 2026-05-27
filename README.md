@@ -98,7 +98,7 @@ All measurements within the L1 bound. No Kani counterexamples at v0.3.0.
 
 ## Continuous integration
 
-Every push and pull-request runs the full CI matrix in [.github/workflows/ci.yml](./.github/workflows/ci.yml). The seven CI jobs:
+Every push and pull-request runs the full CI matrix in [.github/workflows/ci.yml](./.github/workflows/ci.yml). The eight CI jobs:
 
 | Job | What it checks | Blocking |
 |:---|:---|:---:|
@@ -108,6 +108,7 @@ Every push and pull-request runs the full CI matrix in [.github/workflows/ci.yml
 | `Build no_std (Cortex-M4F)` | `cargo build --target thumbv7em-none-eabihf --no-default-features --release` | ✅ |
 | `Documentation (rustdoc)` | `cargo doc --no-deps` with `RUSTDOCFLAGS=-D warnings` (no broken intra-doc links) | ✅ |
 | `License files & SPDX` | All five LICENSE files present with correct SPDX identifiers | ✅ |
+| `Fuzz (build + 60s smoke)` | Builds the three `cargo-fuzz` targets and smoke-runs each for 60 s on nightly | ✅ |
 | `CI` (aggregate) | Green check iff every job above passed | ✅ |
 
 A red X on any job blocks the merge. The aggregate `CI` job is what the branch-protection rule watches.
@@ -157,6 +158,11 @@ axonos-consent/
 │   ├── README.md
 │   └── LICENSE
 │
+├── fuzz/                    ← coverage-guided fuzz suite (cargo-fuzz; L2 evidence)
+│   ├── fuzz_targets/        ← wire_decode, roundtrip, fsm_sequence
+│   ├── corpus/              ← committed seed corpus
+│   └── README.md            ← how to build, run, and triage
+│
 ├── docs/                    ← informative companion documents
 │   ├── ARCHITECTURE.md
 │   ├── SECURITY-MODEL.md
@@ -164,7 +170,7 @@ axonos-consent/
 │   └── citation.bib
 │
 └── .github/workflows/
-    └── ci.yml               ← 7-job CI: fmt, clippy, test, no_std build, docs, license, aggregate
+    └── ci.yml               ← 8-job CI: fmt, clippy, test, no_std build, docs, license, fuzz, aggregate
 ```
 
 ---
@@ -175,7 +181,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-axonos-consent = "0.3"
+axonos-consent = "0.4"
 ```
 
 Use:
@@ -211,6 +217,31 @@ Each harness prints `VERIFICATION SUCCESSFUL` on a passing run. A counterexample
 
 ---
 
+## Fuzz and differential testing
+
+Alongside the L1 Kani harnesses, the reference implementation carries a
+coverage-guided fuzz suite in [`fuzz/`](./fuzz/), built on `cargo-fuzz` /
+libFuzzer. Three targets search the unbounded input space for a
+specification or implementation defect:
+
+| Target | Surface | Property |
+|:---|:---|:---|
+| `wire_decode` | §6 wire-format decoder | totality — never panics on any byte buffer |
+| `roundtrip` | §6 encode/decode | canonical encoding — no two buffers denote one event |
+| `fsm_sequence` | §2–§3 state machine | FSM invariants under arbitrary signed-event streams |
+
+```sh
+cargo install cargo-fuzz --locked
+cargo +nightly fuzz run wire_decode      # or roundtrip, fsm_sequence
+```
+
+The Kani harnesses are L1 evidence (exhaustive proof over a bounded space);
+fuzzing is L2-class evidence (a large, coverage-guided sample of the unbounded
+space). CI builds all three targets and smoke-runs each for 60 s on every
+change. See [`fuzz/README.md`](./fuzz/README.md) and SPEC §10.3.
+
+---
+
 ## Conformance against the specification
 
 Independent implementations can run the conformance vectors:
@@ -227,13 +258,14 @@ For implementations in languages other than Rust, the vectors are exported in ca
 
 | Version | Status | Notes |
 |:---|:---:|:---|
-| **v0.3.0** | **current** | Solo specification; clean restart; v1.0.0-equivalent of the spec text |
+| **v0.4.0** | **current** | Verification release — adds the `cargo-fuzz` suite and SPEC §10.3; protocol byte-identical to v0.3.0 |
+| v0.3.0 | previous | Solo specification; clean restart; v1.0.0-equivalent of the spec text |
 | v0.2.x | superseded | pre-restart drafts |
 | v0.1.x | superseded | early drafts |
 
 A v1.0.0 crate release will accompany the second independent implementation. Until then, the crate remains `0.y.z` to reflect that the implementation surface is not yet locked.
 
-The **specification text** is stable at v0.3.0; the *crate* may iterate at the patch level (`v0.3.x`) for bug fixes and ergonomic improvements without modifying the specification.
+The **specification protocol** is stable as of v0.3.0 and unchanged in v0.4.0; the v0.4.0 bump records added validation evidence (SPEC §10.3), not a protocol change. The *crate* may iterate at the patch level for bug fixes and ergonomic improvements without modifying the protocol.
 
 ---
 

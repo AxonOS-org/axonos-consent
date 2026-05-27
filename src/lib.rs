@@ -2,7 +2,7 @@
 //!
 //! Protocol-level consent enforcement for AxonOS.
 //!
-//! This crate implements the [AxonOS Consent Specification v0.3.0](https://github.com/AxonOS-org/axonos-consent/blob/main/SPEC.md) —
+//! This crate implements the [AxonOS Consent Specification v0.4.0](https://github.com/AxonOS-org/axonos-consent/blob/main/SPEC.md) —
 //! a kernel-level finite-state machine with three states (`Granted`, `Suspended`,
 //! `Withdrawn`) that mediates user permission for `IntentObservation` flow.
 //!
@@ -48,7 +48,7 @@ pub use crate::state::{ConsentMachine, ConsentState};
 pub use crate::wire::ConsentEvent;
 
 /// Specification version this crate implements.
-pub const SPEC_VERSION: &str = "0.3.0";
+pub const SPEC_VERSION: &str = "0.4.0";
 
 /// Crate version (independent of spec version after v0.3.0).
 pub const CRATE_VERSION: &str = env!("CARGO_PKG_VERSION");
