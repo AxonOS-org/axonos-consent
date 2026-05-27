@@ -5,7 +5,7 @@
 use axonos_consent::crypto::compute_tag;
 use axonos_consent::interlock::ObservationGate;
 use axonos_consent::wire::{FLAG_REPLAY_TOLERANT, FLAG_TERMINAL};
-use axonos_consent::{ConsentEvent, ConsentMachine, ConsentState};
+use axonos_consent::{ConsentEvent, ConsentMachine};
 
 fn main() {
     println!("=== AxonOS Consent — basic usage example ===\n");
