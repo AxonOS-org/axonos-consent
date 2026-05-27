@@ -35,7 +35,7 @@
 
 ---
 
-[**Specification (v0.3.0)**](./SPEC.md) · [Architecture](./docs/ARCHITECTURE.md) · [Security model](./docs/SECURITY-MODEL.md) · [Design rationale](./docs/DESIGN-RATIONALE.md) · [Test vectors](./vectors/) · [Changelog](./CHANGELOG.md)
+[**Specification**](./SPEC.md) · [Architecture](./docs/ARCHITECTURE.md) · [Security model](./docs/SECURITY-MODEL.md) · [Design rationale](./docs/DESIGN-RATIONALE.md) · [Test vectors](./vectors/) · [Changelog](./CHANGELOG.md)
 
 </div>
 
@@ -43,7 +43,7 @@
 
 ## What this repository is
 
-1. The **[AxonOS Consent Specification v0.3.0](./SPEC.md)** — a solo specification by Denis Yermakou, defining the kernel-level state machine that mediates user permission for `IntentObservation` flow in a conformant AxonOS deployment.
+1. The **[AxonOS Consent Specification](./SPEC.md)** — a solo specification by Denis Yermakou, defining the kernel-level state machine that mediates user permission for `IntentObservation` flow in a conformant AxonOS deployment.
 2. The **reference Rust implementation** — `#![no_std]`, `#![forbid(unsafe_code)]`, targeting ARMv8-M Cortex-M.
 3. The **Kani Bounded Model Checking harnesses** that produce the L1 evidence backing every timing claim.
 4. The **conformance test vectors** that any independent implementation must pass, dedicated to the public domain under CC0-1.0.
@@ -92,7 +92,7 @@ This is a **standalone subsystem of the AxonOS Project**. No external co-authors
 | Unsafe blocks | 0 | `#![forbid(unsafe_code)]` |
 | Kani harnesses | 4 | passing at v0.3.0 |
 
-All measurements within the L1 bound. No Kani counterexamples at v0.3.0.
+All measurements remain within the L1 bound. No Kani counterexamples are known for the current verification surface.
 
 ---
 
@@ -121,7 +121,7 @@ A red X on any job blocks the merge. The aggregate `CI` job is what the branch-p
 axonos-consent/
 ├── SPEC.md                  ← canonical specification (this is the source of truth)
 ├── README.md                ← this file
-├── CHANGELOG.md             ← version history; v0.3.0 is a clean restart
+├── CHANGELOG.md             ← version history; v0.4.0 is the current verification release
 ├── Cargo.toml               ← crate manifest; MSRV 1.75
 ├── LICENSE                  ← Apache-2.0 OR MIT dispatcher for code
 ├── LICENSE-APACHE           ← Apache-2.0 full text
@@ -295,7 +295,7 @@ The test vectors are CC0 specifically so any independent implementation — in a
 
 <div align="center">
 
-**axonos-consent · v0.3.0 · solo specification**
+**axonos-consent · v0.4.0 · verification release**
 
 Singapore · Zurich · Berlin · Milano · San Mateo
 

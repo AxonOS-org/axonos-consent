@@ -33,7 +33,7 @@ default = []
 std = []
 
 [dependencies]
-# All dependencies are no_std-compatible; the crate carries no external deps at v0.3.0.
+# All dependencies are no_std-compatible; the crate carries no external dependencies at v0.4.0.
 
 [profile.release]
 codegen-units = 1
