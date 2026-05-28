@@ -154,10 +154,7 @@ impl DualControlMachine {
     /// If a safety-increasing transition is half-authorised, returns the party
     /// that has already authorised it; otherwise `None`.
     pub fn pending(&self) -> Option<Party> {
-        match self.pending {
-            Some(p) => Some(p.proposer),
-            None => None,
-        }
+        self.pending.map(|p| p.proposer)
     }
 
     /// Propose a transition on behalf of `party`.
@@ -300,7 +297,9 @@ mod tests {
     #[test]
     fn either_party_can_suspend_unilaterally() {
         let mut m = machine();
-        let r = m.propose(signed(0x02, 1, &PATIENT), Party::Patient).unwrap();
+        let r = m
+            .propose(signed(0x02, 1, &PATIENT), Party::Patient)
+            .unwrap();
         assert_eq!(r, CoAuthOutcome::Applied(ConsentState::Suspended));
 
         let mut m2 = machine();
@@ -324,9 +323,12 @@ mod tests {
     fn resume_requires_both_parties() {
         let mut m = machine();
         // Suspend first.
-        m.propose(signed(0x02, 1, &PATIENT), Party::Patient).unwrap();
+        m.propose(signed(0x02, 1, &PATIENT), Party::Patient)
+            .unwrap();
         // Patient alone only arms a pending request.
-        let r = m.propose(signed(0x01, 2, &PATIENT), Party::Patient).unwrap();
+        let r = m
+            .propose(signed(0x01, 2, &PATIENT), Party::Patient)
+            .unwrap();
         assert_eq!(r, CoAuthOutcome::PendingCoAuth(ConsentState::Suspended));
         assert_eq!(m.pending(), Some(Party::Patient));
         assert_eq!(m.state(), ConsentState::Suspended);
@@ -341,7 +343,8 @@ mod tests {
     #[test]
     fn single_party_can_never_resume() {
         let mut m = machine();
-        m.propose(signed(0x02, 1, &PATIENT), Party::Patient).unwrap();
+        m.propose(signed(0x02, 1, &PATIENT), Party::Patient)
+            .unwrap();
         // Many repeated patient proposals never commit.
         for ts in 2..50 {
             let r = m
@@ -355,9 +358,11 @@ mod tests {
     #[test]
     fn expired_counter_authorisation_does_not_commit() {
         let mut m = DualControlMachine::with_window(MID, PATIENT, GUARDIAN, 100);
-        m.propose(signed(0x02, 1, &PATIENT), Party::Patient).unwrap();
+        m.propose(signed(0x02, 1, &PATIENT), Party::Patient)
+            .unwrap();
         // Patient arms at t=10.
-        m.propose(signed(0x01, 10, &PATIENT), Party::Patient).unwrap();
+        m.propose(signed(0x01, 10, &PATIENT), Party::Patient)
+            .unwrap();
         // Guardian arrives at t=10_000 — far outside the 100µs window.
         let r = m
             .propose(signed(0x01, 10_000, &GUARDIAN), Party::Guardian)
@@ -371,7 +376,8 @@ mod tests {
     #[test]
     fn guardian_event_with_patient_key_is_rejected() {
         let mut m = machine();
-        m.propose(signed(0x02, 1, &PATIENT), Party::Patient).unwrap();
+        m.propose(signed(0x02, 1, &PATIENT), Party::Patient)
+            .unwrap();
         // Event tagged with the patient key but claimed as Guardian: signature
         // verification uses the guardian key and fails.
         let forged = signed(0x01, 2, &PATIENT);
@@ -396,7 +402,8 @@ mod tests {
     #[test]
     fn withdrawn_is_terminal_even_under_dual_control() {
         let mut m = machine();
-        m.propose(signed(0x03, 1, &PATIENT), Party::Patient).unwrap();
+        m.propose(signed(0x03, 1, &PATIENT), Party::Patient)
+            .unwrap();
         // Both parties cannot resurrect a withdrawn manifest.
         assert!(matches!(
             m.propose(signed(0x01, 2, &PATIENT), Party::Patient),

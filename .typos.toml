@@ -1,0 +1,22 @@
+# Spelling-checker configuration for axonos-consent.
+# Binary seed corpora and machine-generated files are excluded; a small
+# allow-list covers intentional technical spellings.
+
+[files]
+extend-exclude = [
+    "fuzz/corpus/**",
+    "vectors/**",
+    "target/**",
+    "*.lock",
+]
+
+[default.extend-words]
+# "if and only if" — used in the spec and proofs
+iff = "iff"
+# truncated-tag accumulator variable
+acc = "acc"
+
+[default.extend-identifiers]
+# Cryptographic / embedded identifiers that resemble dictionary words
+thumbv7em = "thumbv7em"
+thumbv8m = "thumbv8m"

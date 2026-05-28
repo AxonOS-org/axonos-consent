@@ -3,6 +3,7 @@ name: CI
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -19,154 +20,243 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # ── 1. Formatting ───────────────────────────────────────────────────
   fmt:
     name: Format (rustfmt)
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
-
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
+      - run: cargo fmt --all --check
 
-      - name: cargo fmt --all --check
-        run: cargo fmt --all --check
-
+  # ── 2. Lint ─────────────────────────────────────────────────────────
   clippy:
-    name: Lint (clippy)
+    name: Lint (clippy, -D warnings)
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
-
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
-
       - uses: Swatinem/rust-cache@v2
+      - run: cargo clippy --all-features --all-targets -- -D warnings
 
-      - name: cargo clippy
-        run: cargo clippy --all-features --all-targets -- -D warnings
-
-  test:
-    name: Test (ubuntu, stable)
+  # ── 3. Spelling ─────────────────────────────────────────────────────
+  typos:
+    name: Spelling (typos)
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
+      - uses: crate-ci/typos@master
 
+  # ── 4. Tests, stable ────────────────────────────────────────────────
+  test:
+    name: Test (stable)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-
       - uses: Swatinem/rust-cache@v2
-
-      - name: cargo test --all-features
+      - name: All features
         run: cargo test --all-features --verbose
-
-      - name: cargo test --no-default-features
+      - name: No default features (no_std surface)
         run: cargo test --no-default-features --verbose
 
-  build_no_std:
-    name: Build no_std (Cortex-M4F)
+  # ── 5. Tests, beta (early warning for upcoming toolchains) ──────────
+  test-beta:
+    name: Test (beta)
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@beta
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo +beta test --all-features --verbose
 
-      - uses: dtolnay/rust-toolchain@stable
+  # ── 6. Minimum supported Rust version ───────────────────────────────
+  msrv:
+    name: MSRV (1.75.0)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
         with:
-          targets: thumbv7em-none-eabihf
-
+          toolchain: 1.75.0
       - uses: Swatinem/rust-cache@v2
+      - run: cargo +1.75.0 test --all-features --verbose
 
-      - name: cargo build --target thumbv7em-none-eabihf
-        run: cargo build --target thumbv7em-none-eabihf --no-default-features --release
-
-  docs:
-    name: Documentation (rustdoc)
+  # ── 7. Doctests ─────────────────────────────────────────────────────
+  doctests:
+    name: Doctests
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
-
       - uses: dtolnay/rust-toolchain@stable
-
       - uses: Swatinem/rust-cache@v2
+      - run: cargo test --doc --all-features --verbose
 
-      - name: cargo doc --no-deps
+  # ── 8. Documentation builds clean ───────────────────────────────────
+  docs:
+    name: Documentation (rustdoc, -D warnings)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: cargo doc
         env:
           RUSTDOCFLAGS: -D warnings
         run: cargo doc --no-deps --all-features
 
-  license:
-    name: License files and SPDX
+  # ── 9. Bare-metal build, Cortex-M4F (ARMv7E-M) ──────────────────────
+  build-cortex-m4f:
+    name: Bare-metal build (Cortex-M4F)
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: thumbv7em-none-eabihf
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --target thumbv7em-none-eabihf --no-default-features --release
 
-      - name: All license files present
+  # ── 10. Bare-metal build, Cortex-M33 (ARMv8-M, the AxonOS target) ───
+  build-cortex-m33:
+    name: Bare-metal build (Cortex-M33)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: thumbv8m.main-none-eabihf
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --target thumbv8m.main-none-eabihf --no-default-features --release
+
+  # ── 11. Undefined-behaviour check (Miri) ────────────────────────────
+  miri:
+    name: Miri (UB detection)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: miri
+      - uses: Swatinem/rust-cache@v2
+      - name: cargo miri test
+        run: cargo +nightly miri test --all-features
+        env:
+          MIRIFLAGS: -Zmiri-strict-provenance
+
+  # ── 12. Fuzz targets build and smoke-run ────────────────────────────
+  fuzz:
+    name: Fuzz (build + smoke)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+      - name: Build targets
+        run: |
+          cargo +nightly fuzz build wire_decode
+          cargo +nightly fuzz build roundtrip
+          cargo +nightly fuzz build fsm_sequence
+      - name: Smoke-run targets
+        run: |
+          cargo +nightly fuzz run wire_decode -- -runs=512
+          cargo +nightly fuzz run roundtrip -- -runs=512
+          cargo +nightly fuzz run fsm_sequence -- -runs=512
+
+  # ── 13. Supply-chain and licence policy (cargo-deny) ────────────────
+  deny:
+    name: Supply chain (cargo-deny)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check all
+
+  # ── 14. Coverage report (cargo-llvm-cov) ────────────────────────────
+  coverage:
+    name: Coverage (llvm-cov)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@cargo-llvm-cov
+      - name: Generate coverage summary
+        run: cargo llvm-cov --all-features --summary-only
+
+  # ── 15. Packaging sanity (publishable to crates.io) ─────────────────
+  package:
+    name: Package (publish dry-run)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo publish --dry-run
+
+  # ── 16. Repository integrity (licences, SPDX, vectors) ──────────────
+  integrity:
+    name: Repository integrity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Licence files present
         run: |
           test -f LICENSE
           test -f LICENSE-APACHE
           test -f LICENSE-MIT
           test -f LICENSE-CC-BY-SA
           test -f vectors/LICENSE
-          echo "all license files present"
-
-      - name: SPDX identifiers correct
+          echo "all licence files present"
+      - name: SPDX identifiers present
         run: |
           grep -q 'SPDX-License-Identifier: Apache-2.0 OR MIT' LICENSE
           grep -q 'SPDX-License-Identifier: CC-BY-SA-4.0' LICENSE-CC-BY-SA
           grep -q 'SPDX-License-Identifier: CC0-1.0' vectors/LICENSE
           echo "SPDX identifiers present"
-
-  fuzz:
-    name: Fuzz build and smoke
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: dtolnay/rust-toolchain@nightly
-
-      - uses: Swatinem/rust-cache@v2
-
-      - name: Install cargo-fuzz
-        run: cargo install cargo-fuzz --locked
-
-      - name: Build fuzz targets
+      - name: Conformance vectors present
         run: |
-          cargo +nightly fuzz build wire_decode
-          cargo +nightly fuzz build roundtrip
-          cargo +nightly fuzz build fsm_sequence
+          test -d vectors
+          test -f vectors/README.md
+          echo "conformance vectors present"
 
-      - name: Smoke fuzz targets
-        run: |
-          cargo +nightly fuzz run wire_decode -- -runs=256
-          cargo +nightly fuzz run roundtrip -- -runs=256
-          cargo +nightly fuzz run fsm_sequence -- -runs=256
-
-  ci_success:
+  # ── 17. Aggregate gate (branch-protection target) ──────────────────
+  ci:
     name: CI
     runs-on: ubuntu-latest
+    if: always()
     needs:
       - fmt
       - clippy
+      - typos
       - test
-      - build_no_std
+      - test-beta
+      - msrv
+      - doctests
       - docs
-      - license
+      - build-cortex-m4f
+      - build-cortex-m33
+      - miri
       - fuzz
-    if: always()
-
+      - deny
+      - coverage
+      - package
+      - integrity
     steps:
-      - name: All jobs succeeded
+      - name: Verify all jobs succeeded
         run: |
           if [ "${{ contains(needs.*.result, 'failure') }}" = "true" ] || \
              [ "${{ contains(needs.*.result, 'cancelled') }}" = "true" ]; then
-            echo "one or more jobs failed"
+            echo "one or more required jobs failed"
             exit 1
           fi
-
-          echo "all CI jobs passed"
+          echo "all required CI jobs passed"

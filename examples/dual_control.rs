@@ -65,7 +65,10 @@ fn main() {
 
     // 5. Neither party — nor both together — can resurrect a withdrawn manifest.
     let attempt = m.propose(signed(0x01, 5_000, &patient_key), Party::Patient);
-    println!("Patient attempts to restore after withdrawal: {:?}", attempt);
+    println!(
+        "Patient attempts to restore after withdrawal: {:?}",
+        attempt
+    );
     println!("\nThe safe direction is always one signature away;");
     println!("resuming the flow always takes two.");
 }
