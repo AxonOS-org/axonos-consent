@@ -1,6 +1,6 @@
 # AxonOS Consent Specification
 
-**Version 0.4.0** · 2026-05-27 · Normative
+**Version 0.5.0** · 2026-05-28 · Normative
 
 **Author:** Denis Yermakou
 **Project:** AxonOS
@@ -20,6 +20,8 @@ This specification supersedes all prior drafts of consent semantics circulated i
 The reference implementation is the `axonos-consent` crate at the version tagged in [`Cargo.toml`](./Cargo.toml).
 
 Version 0.4.0 is editorially identical to v0.3.0 in protocol terms. The three-state machine, the five admissible transitions, the wire format, the timing bounds, and the cryptographic requirements are byte-for-byte unchanged. v0.4.0 differs from v0.3.0 only by the addition of the informative §10.3, which records the fuzz and differential-testing evidence for the reference implementation. An implementation conformant with v0.3.0 is conformant with v0.4.0 without modification.
+
+Version 0.5.0 is a strict superset of v0.4.0. The single-party three-state machine, the five admissible transitions, the wire format, the timing bounds, and the cryptographic requirements are byte-for-byte unchanged. v0.5.0 adds the new, **optional** §12, which specifies multi-party (guardian) co-authorisation for clinical deployments, and promotes wire flag bit 3 (`FLAG_GUARDIAN`) from reserved to defined. An implementation conformant with v0.4.0 remains conformant with v0.5.0 without modification; multi-party support is an optional conformance profile.
 
 ---
 
@@ -44,7 +46,8 @@ Byte-level wire definitions are normative; the accompanying Rust types are infor
 9. [Kernel interlock](#9-kernel-interlock)
 10. [Conformance](#10-conformance)
 11. [Threat model](#11-threat-model)
-12. [References](#12-references)
+12. [Multi-party (guardian) co-authorisation](#12-multi-party-guardian-co-authorisation)
+13. [References](#13-references)
 
 ---
 
@@ -70,7 +73,7 @@ This specification does **not** define:
 - The user-interface affordance through which the user signals a consent state change. That is the responsibility of the device manufacturer's UI layer; this specification only defines what arrives at the trusted-path input.
 - The hardware design of the trusted path itself.
 - The application layer's behaviour after receipt of a consent-related error code from the SDK. Applications **SHOULD** display a clear notification and stop attempting further observation requests; the specifics are application-domain decisions.
-- Multi-party consent (a guardian co-authorising with a patient). This is reserved for a future revision; see [§13 Future work](./docs/DESIGN-RATIONALE.md#future-work).
+- Multi-party consent in its *single-party* baseline: the baseline machine of §2 is single-signature. Optional multi-party (guardian) co-authorisation is specified normatively in [§12](#12-multi-party-guardian-co-authorisation).
 - Any inter-device coupling protocol. This specification is for a single-device AxonOS deployment; multi-device deployments use the [Standard's swarm coordination subsystem](https://github.com/AxonOS-org/axonos-standard/blob/main/architecture/swarm-coordination.md) layered above this one.
 
 ---
@@ -365,7 +368,7 @@ The reference implementation achieves this by writing the new state under `Order
 
 ### 10.1 Conformance criteria
 
-An implementation is **conformant with AxonOS Consent v0.4.0** if, and only if, it satisfies all of:
+An implementation is **conformant with the AxonOS Consent v0.5.0 baseline profile** if, and only if, it satisfies all of:
 
 1. Models consent as the three-state FSM of §2.
 2. Admits exactly the five transitions of §3.1 and refuses all others.
@@ -377,6 +380,11 @@ An implementation is **conformant with AxonOS Consent v0.4.0** if, and only if, 
 8. Persists state across power cycles per §8 with tamper detection per §8.3.
 9. Maintains the kernel interlock contract of §9.
 10. Passes the conformance test suite shipped with the reference implementation.
+
+An implementation additionally conforms to the **multi-party profile** if it
+also satisfies every requirement of §12. The multi-party profile is optional;
+the baseline profile is unaffected by it. A v0.4.0-conformant implementation is
+a conformant v0.5.0 baseline-profile implementation without modification.
 
 ### 10.2 Test vectors
 
@@ -430,9 +438,77 @@ The consent system's trust anchor is the **kernel** and the **trusted-path publi
 
 ---
 
-## 12. References
+## 12. Multi-party (guardian) co-authorisation
 
-### 12.1 Normative
+*This section is **optional**. An implementation that does not support
+multi-party deployments is conformant without it. An implementation that
+**does** support multi-party deployments **MUST** satisfy this section.*
+
+### 12.1 Motivation
+
+In clinical deployments a guardian may co-authorise consent decisions together
+with the patient — for example in the ALS rehabilitation pilot in the canonical
+Standard's roadmap. Multi-party support adds a second authorising key without
+weakening the single-party guarantees of §2–§11.
+
+### 12.2 Parties
+
+A multi-party deployment recognises exactly two parties:
+
+| Party | Key | Discriminant |
+|:---|:---|:---:|
+| Patient | trusted-path (primary) key | `0x01` |
+| Guardian | secondary key | `0x02` |
+
+Each consent event **MUST** be verified against the key of the party that
+claims to have produced it. An event claimed for one party but signed with the
+other party's key **MUST** be rejected with the same error as any other
+signature failure (§7).
+
+### 12.3 The safe-direction principle
+
+A transition is **exposure-reducing** if its target is `Suspended` or
+`Withdrawn`, and **exposure-increasing** if it is `Suspended → Granted`.
+`Granted → Granted` is idempotent and counts as neither.
+
+- Either party **MAY** apply any exposure-reducing transition unilaterally.
+  Stopping or pausing the flow **MUST NOT** require the other party.
+- An exposure-increasing transition (`Suspended → Granted`) **MUST NOT** take
+  effect on the authorisation of a single party. It **MUST** be authorised by
+  **both** parties.
+
+This is the central safety property of multi-party operation: the system can
+always be stopped by one party, and can only be resumed by two.
+
+### 12.4 Co-authorisation window
+
+An implementation **MUST** define a finite co-authorisation window. When one
+party authorises an exposure-increasing transition, the matching authorisation
+from the other party **MUST** arrive within the window, measured by the kernel
+monotonic timestamp (§6), for the transition to commit. A counter-authorisation
+that is older than the window, or that predates the first authorisation, **MUST
+NOT** commit; it **MAY** instead be treated as a fresh first authorisation from
+the arriving party. The reference implementation's default window is two
+minutes.
+
+### 12.5 Terminal state is unaffected
+
+`Withdrawn` remains terminal under multi-party operation. No combination of
+party authorisations may transition out of `Withdrawn`; the anti-coercion
+property of §3 holds unchanged.
+
+### 12.6 Reference implementation
+
+The reference implementation provides this section's semantics through the
+`dual_control` module (`DualControlMachine`, `Party`, `CoAuthOutcome`). The
+party-distinctness requirement of §12.3 is verified by the Kani harness
+`co_authorisation_requires_two_parties`.
+
+---
+
+## 13. References
+
+### 13.1 Normative
 
 - **[AxonOS-Standard]** AxonOS Project. *The AxonOS Standard, version 1.0.0.* 2026. CC-BY-SA-4.0. https://github.com/AxonOS-org/axonos-standard
 - **[RFC2119]** Bradner, S. *Key words for use in RFCs to Indicate Requirement Levels.* RFC 2119, 1997.
@@ -440,7 +516,7 @@ The consent system's trust anchor is the **kernel** and the **trusted-path publi
 - **[RFC8949]** Bormann, C. & Hoffman, P. *Concise Binary Object Representation (CBOR).* RFC 8949, 2020.
 - **[Ed25519]** Bernstein, D. J. *Ed25519: high-speed high-security signatures.* 2011.
 
-### 12.2 Informative
+### 13.2 Informative
 
 - **[Kani]** Kani Verification Project. https://model-checking.github.io/kani/
 - **[cargo-fuzz]** Rust Fuzzing Authority. *cargo-fuzz: a `cargo` subcommand for fuzzing with libFuzzer.* https://github.com/rust-fuzz/cargo-fuzz

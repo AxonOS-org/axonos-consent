@@ -98,6 +98,32 @@ impl ConsentMachine {
     pub fn manifest_id(&self) -> u16 {
         self.manifest_id
     }
+
+    /// Apply an already-authenticated transition without re-running signature
+    /// verification.
+    ///
+    /// Crate-internal. The only caller is the [`crate::dual_control`] layer,
+    /// which performs its own two-key verification before committing a
+    /// co-authorised transition. This method still re-checks admissibility as
+    /// defence-in-depth, so it can never drive the machine through an
+    /// inadmissible transition even if a caller passes a wrong target.
+    pub(crate) fn apply_verified(
+        &mut self,
+        target: ConsentState,
+    ) -> Result<ConsentState, ConsentError> {
+        let current = self.state();
+        if !is_admissible_transition(current, target) {
+            return Err(ConsentError::InadmissibleTransition);
+        }
+        self.state.store(target as u8, Ordering::SeqCst);
+        Ok(target)
+    }
+
+    /// Crate-internal read access to the trusted-path (patient) public key,
+    /// used by the dual-control layer to verify patient-originated events.
+    pub(crate) fn trusted_path_pubkey(&self) -> &[u8; 32] {
+        &self.trusted_path_pubkey
+    }
 }
 
 /// Is the transition `from → to` admissible per SPEC §3.1?

@@ -1,10 +1,10 @@
 [package]
 name = "axonos-consent"
-version = "0.4.0"
+version = "0.5.0"
 edition = "2021"
 rust-version = "1.75"
-authors = ["Denis Yermakou <info@axonos.org>"]
-description = "Protocol-level consent enforcement for AxonOS — kernel-level state machine, formally bounded, no_std."
+authors = ["Denis Yermakou <connect@axonos.org>"]
+description = "Protocol-level consent enforcement for AxonOS — kernel-level state machine with optional multi-party (guardian) co-authorisation, formally bounded, no_std."
 documentation = "https://docs.rs/axonos-consent"
 repository = "https://github.com/AxonOS-org/axonos-consent"
 homepage = "https://axonos.org"
@@ -50,6 +50,10 @@ overflow-checks = true
 
 [[example]]
 name = "basic_usage"
+required-features = ["std"]
+
+[[example]]
+name = "dual_control"
 required-features = ["std"]
 
 [[bench]]

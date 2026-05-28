@@ -23,8 +23,14 @@ pub const FLAG_FROM_SECURE_WORLD: u8 = 1 << 1;
 /// Flag bit 2: event is acceptable as an idempotent re-application.
 pub const FLAG_REPLAY_TOLERANT: u8 = 1 << 2;
 
+/// Flag bit 3: event originated from the guardian key in a dual-control
+/// (multi-party) deployment. See [`crate::dual_control`]. Defined in v0.5.0;
+/// reserved and rejected in earlier versions.
+pub const FLAG_GUARDIAN: u8 = 1 << 3;
+
 /// Mask of all currently-defined flag bits. Bits outside this mask are reserved.
-pub const FLAGS_DEFINED_MASK: u8 = FLAG_TERMINAL | FLAG_FROM_SECURE_WORLD | FLAG_REPLAY_TOLERANT;
+pub const FLAGS_DEFINED_MASK: u8 =
+    FLAG_TERMINAL | FLAG_FROM_SECURE_WORLD | FLAG_REPLAY_TOLERANT | FLAG_GUARDIAN;
 
 /// A consent event as it crosses the trusted-path / kernel boundary.
 ///

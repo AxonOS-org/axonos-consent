@@ -73,11 +73,19 @@ Different capabilities could be in different consent states for the same
 manifest (e.g., `Navigation` granted but `WorkloadAdvisory` suspended).
 This is reserved for a future v0.4 or v0.5 of the specification.
 
-### 6.2 Multi-party consent
+### 6.2 Multi-party consent — *implemented in v0.5.0*
 
 For clinical deployments where a guardian co-authorises with a patient, the
-consent state machine needs a second-signature path. Out of scope for v0.3.0;
-reserved for v0.5 or v1.0 of the specification.
+consent state machine needs a second-signature path. **Delivered in v0.5.0**
+as the `dual_control` module and specified normatively in
+[SPEC §12](../SPEC.md#12-multi-party-guardian-co-authorisation).
+
+The design follows the *safe-direction principle*: either party may reduce
+neural-data exposure (`Suspended`, `Withdrawn`) unilaterally, while resuming
+the flow (`Suspended → Granted`) requires both parties to authorise within a
+bounded window. The party-distinctness requirement is verified by the Kani
+harness `co_authorisation_requires_two_parties`. Multi-party support is an
+optional conformance profile; the single-party baseline is unchanged.
 
 ### 6.3 L3 evidence
 

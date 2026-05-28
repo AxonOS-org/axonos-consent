@@ -4,6 +4,65 @@ All notable changes to `axonos-consent` are documented here. Format based on [Ke
 
 ---
 
+## [0.5.0] — 2026-05-28
+
+### Added — multi-party (guardian) co-authorisation
+
+The headline feature of this release. For clinical deployments — the ALS
+pilot in the canonical Standard's roadmap is the motivating case — a
+guardian can now co-authorise consent changes together with the patient.
+This implements the second-signature path reserved in
+[DESIGN-RATIONALE §6.2](./docs/DESIGN-RATIONALE.md) and specified in the new
+[SPEC §13](./SPEC.md).
+
+- **`dual_control` module** with `DualControlMachine`, `Party`
+  (`Patient` / `Guardian`), and `CoAuthOutcome` (`Applied` / `PendingCoAuth`).
+- **The safe-direction principle.** Either party may *unilaterally reduce*
+  exposure — moving to `Suspended` or `Withdrawn` never requires agreement.
+  *Increasing* exposure (`Suspended → Granted`, i.e. resuming neural-data
+  flow) requires **both** parties to authorise the same transition within a
+  bounded window. No sequence of signatures from a single party can resume
+  the flow.
+- **Per-party signature verification.** A guardian-claimed event is verified
+  against the guardian key; a patient-claimed event against the trusted-path
+  key. A forged-party event fails with `SignatureInvalid`.
+- **Bounded co-authorisation window** (`DEFAULT_CO_AUTH_WINDOW_US`, two
+  minutes; configurable via `DualControlMachine::with_window`). A stale or
+  out-of-order counter-authorisation never commits; it re-arms a fresh
+  pending request instead.
+- **`FLAG_GUARDIAN`** (wire flag bit 3) for wire-level disambiguation of
+  guardian-originated events. Previously reserved; now defined. This is a
+  backward-compatible relaxation — events that were rejected for setting
+  bit 3 are now accepted.
+- **New Kani harness** `co_authorisation_requires_two_parties` — proves the
+  exposure-increasing transition commits only when two *distinct* parties
+  authorise it, and that `Suspended → Granted` is the only exposure-increasing
+  transition. Brings the formal-proof count to **5 harnesses**.
+- **New example** `examples/dual_control.rs` and an extensive `#[cfg(test)]`
+  suite (eleven tests) covering unilateral reduction, two-party resume,
+  single-party impossibility, window expiry, forged-party rejection, and
+  terminal-state immutability.
+
+### Changed
+
+- `SPEC_VERSION` is now `"0.5.0"`; the specification adds §13 (multi-party
+  co-authorisation). The three-state single-party machine, the 16-byte wire
+  format, and all v0.4.0 timing bounds are **unchanged and byte-compatible**.
+- Author email updated to the project-canonical `connect@axonos.org`.
+- README brought to the unified AxonOS visual standard (palette badges,
+  full stack table, canonical footer).
+
+### Notes
+
+- **Fully additive.** The v0.4.0 single-party API (`ConsentMachine`,
+  `ConsentEvent`, `ConsentState`, `ObservationGate`) is unchanged. Existing
+  single-device deployments need no changes; dual control is opt-in by
+  choosing `DualControlMachine` instead of `ConsentMachine`.
+- **Minor bump 0.4.0 → 0.5.0** per SemVer — new functionality, no breaking
+  changes, no new runtime dependency (still zero-dependency `no_std`).
+
+---
+
 ## [0.4.0] — 2026-05-27
 
 **Verification release. The consent protocol is unchanged from v0.3.0; this release strengthens the evidence base.**
