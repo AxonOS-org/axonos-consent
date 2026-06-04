@@ -1,0 +1,24 @@
+SPDX-License-Identifier: Apache-2.0 OR MIT
+
+AxonOS Consent — Dual Licence
+=============================
+
+This crate (axonos-consent) is licensed under your choice of either:
+
+  * Apache License, Version 2.0
+    (see LICENSE-APACHE, or http://www.apache.org/licenses/LICENSE-2.0)
+
+  * MIT License
+    (see LICENSE-MIT, or http://opensource.org/licenses/MIT)
+
+at your option.
+
+Documentation and specification text are additionally available under the
+Creative Commons Attribution-ShareAlike 4.0 International licence
+(CC-BY-SA-4.0; see LICENSE-CC-BY-SA). Conformance test vectors are dedicated
+to the public domain under CC0-1.0 (see vectors/LICENSE).
+
+Unless you explicitly state otherwise, any contribution intentionally
+submitted for inclusion in the work by you, as defined in the Apache-2.0
+licence, shall be dual-licensed as above, without any additional terms or
+conditions.

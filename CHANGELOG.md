@@ -4,6 +4,21 @@ All notable changes to `axonos-consent` are documented here. Format based on [Ke
 
 ---
 
+## [0.6.0] — 2026-06-04
+
+### Fixed
+- CI `integrity` job: restored the top-level `LICENSE` pointer (SPDX
+  `Apache-2.0 OR MIT`) required by the multi-licence layout and the integrity
+  check. It had been removed during an organisation-wide licence cleanup, which
+  broke the `test -f LICENSE` step and, with it, the aggregate CI gate. The full
+  `LICENSE-APACHE`, `LICENSE-MIT`, `LICENSE-CC-BY-SA`, and `vectors/LICENSE`
+  files are unchanged.
+- CI `fuzz` job: install `cargo-fuzz` as a prebuilt binary via
+  `taiki-e/install-action` instead of `cargo install --locked` (which compiled
+  it on nightly and could fail), and pin `--target x86_64-unknown-linux-gnu` for
+  every `cargo fuzz build`/`run` — the prebuilt binary otherwise targets musl,
+  whose `std` is absent and whose static libc is incompatible with the sanitiser.
+
 ## [0.5.0] — 2026-05-28
 
 ### Added — multi-party (guardian) co-authorisation
