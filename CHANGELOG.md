@@ -4,6 +4,29 @@ All notable changes to `axonos-consent` are documented here. Format based on [Ke
 
 ---
 
+## [0.7.0] — 2026-06-04
+
+### Added
+- **Automated GitHub Releases.** `.github/workflows/release.yml` now creates a
+  GitHub Release on every `v*.*.*` tag push, with the matching CHANGELOG section
+  as the body and source archives (`.tar.gz`, `.zip`) attached. Previously,
+  pushing a tag produced no Release — v0.6.0 was tagged but never published.
+
+### Changed
+- **README de-staled and made self-maintaining.** The crate-version badge is now
+  a dynamic `github/v/release` shield that always reflects the latest tag and can
+  no longer go stale. The stale "current version" markers — the version-status
+  table that still listed v0.4.0 as current, the "v0.5.0 is the current release"
+  note, and the footer version — are replaced with pointers to the releases page
+  and CHANGELOG (single source of truth). The "Position in the AxonOS stack"
+  table now also lists `axonos-protocol`, `axonos-conformance`, and
+  `axonos-validation`.
+
+### Notes
+- No library, API, or wire-protocol change from v0.6.0. The single-party consent
+  protocol remains stable as of the v0.3.0 specification; this release covers
+  release automation and documentation only.
+
 ## [0.6.0] — 2026-06-04
 
 ### Fixed

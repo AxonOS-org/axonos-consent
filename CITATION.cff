@@ -20,5 +20,5 @@ keywords:
   - neurotechnology
   - rust
 license: [Apache-2.0, MIT]
-version: "0.6.0"
-date-released: "2026-05-28"
+version: "0.7.0"
+date-released: "2026-06-04"

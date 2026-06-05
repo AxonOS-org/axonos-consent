@@ -7,7 +7,7 @@
 #### A kernel-level finite-state machine with formally bounded withdrawal latency.
 
 [![CI](https://github.com/AxonOS-org/axonos-consent/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/AxonOS-org/axonos-consent/actions/workflows/ci.yml)
-[![Crate](https://img.shields.io/badge/Crate-v0.5.0-0a4a8f?style=flat-square)](https://github.com/AxonOS-org/axonos-consent/releases/tag/v0.5.0)
+[![Release](https://img.shields.io/github/v/release/AxonOS-org/axonos-consent?style=flat-square&label=Release&color=0a4a8f)](https://github.com/AxonOS-org/axonos-consent/releases)
 [![Spec](https://img.shields.io/badge/Spec-v0.5.0-0a4a8f?style=flat-square)](./SPEC.md)
 [![Standard](https://img.shields.io/badge/Standard-v1.0.0-0a4a8f?style=flat-square)](https://github.com/AxonOS-org/axonos-standard)
 [![Rust](https://img.shields.io/badge/Rust-no__std-CE422B?style=flat-square&logo=rust&logoColor=white)](https://www.rust-lang.org/)
@@ -78,7 +78,7 @@ This is a **standalone subsystem of the AxonOS Project**. No external co-authors
 | Critical-path allocations | 0 | static analysis |
 | Source lines (`src/`) | 594 | — |
 | Unsafe blocks | 0 | `#![forbid(unsafe_code)]` |
-| Kani harnesses | 5 | passing at v0.5.0 |
+| Kani harnesses | 5 | passing in CI |
 
 All measurements remain within the L1 bound. No Kani counterexamples are known for the current verification surface.
 
@@ -109,7 +109,7 @@ A red X on any job blocks the merge. The aggregate `CI` job is what the branch-p
 axonos-consent/
 ├── SPEC.md                  ← canonical specification (this is the source of truth)
 ├── README.md                ← this file
-├── CHANGELOG.md             ← version history; v0.5.0 is the current release
+├── CHANGELOG.md             ← version history (see the releases page for the current release)
 ├── Cargo.toml               ← crate manifest; MSRV 1.75
 ├── LICENSE                  ← Apache-2.0 OR MIT dispatcher for code
 ├── LICENSE-APACHE           ← Apache-2.0 full text
@@ -247,16 +247,9 @@ For implementations in languages other than Rust, the vectors are exported in ca
 
 ## Versioning
 
-| Version | Status | Notes |
-|:---|:---:|:---|
-| **v0.4.0** | **current** | Verification release — adds the `cargo-fuzz` suite and SPEC §10.3; protocol byte-identical to v0.3.0 |
-| v0.3.0 | previous | Solo specification; clean restart; v1.0.0-equivalent of the spec text |
-| v0.2.x | superseded | pre-restart drafts |
-| v0.1.x | superseded | early drafts |
+The crate is published as `0.y.z`: the implementation surface is not yet locked, and a `v1.0.0` release will accompany the second independent implementation. For the current release and its notes, see the [releases page](https://github.com/AxonOS-org/axonos-consent/releases) and [CHANGELOG.md](./CHANGELOG.md).
 
-A v1.0.0 crate release will accompany the second independent implementation. Until then, the crate remains `0.y.z` to reflect that the implementation surface is not yet locked.
-
-The single-party **specification protocol** is stable as of v0.3.0 and unchanged through v0.5.0. v0.4.0 recorded added validation evidence (SPEC §10.3); v0.5.0 adds the optional multi-party (guardian) co-authorisation profile (SPEC §12) without altering the single-party baseline. An implementation conformant with the v0.4.0 protocol is conformant with the v0.5.0 baseline profile without modification.
+The single-party **specification protocol** is stable as of v0.3.0 and unchanged since: v0.4.0 recorded added validation evidence (SPEC §10.3) and v0.5.0 added the optional multi-party (guardian) co-authorisation profile (SPEC §12) without altering the single-party baseline. The 0.6 and 0.7 releases are implementation, licensing, and CI changes only — they do not touch the wire protocol. An implementation conformant with the v0.4.0 protocol is conformant with the current baseline profile without modification.
 
 ---
 
@@ -290,6 +283,9 @@ The single-party `ConsentMachine` is unchanged; multi-party is opt-in by using
 | Kernel substrate | [`axonos-kernel`](https://github.com/AxonOS-org/axonos-kernel) | EDF scheduling, SPSC IPC, capability gate, monotonic time |
 | Application boundary | [`axonos-sdk`](https://github.com/AxonOS-org/axonos-sdk) | Typed intents, manifests, ABI-compatible integration |
 | **Consent layer** | **`axonos-consent`** | Deterministic consent FSM + optional multi-party co-authorisation (this repository) |
+| Consent protocol | [`axonos-protocol`](https://github.com/AxonOS-org/axonos-protocol) | Network-level consent protocol; bounded CBOR frames, exhaustive state machine |
+| Conformance | [`axonos-conformance`](https://github.com/AxonOS-org/axonos-conformance) | Byte-exact RFC-0005 / RFC-0006 vectors across Rust, Python, C, JavaScript, Java |
+| Validation | [`axonos-validation`](https://github.com/AxonOS-org/axonos-validation) | Raw measurement traces and reproducible post-processing |
 | Mesh coordination | [`axonos-swarm`](https://github.com/AxonOS-org/axonos-swarm) | Distributed timing, co-availability, peer health monitoring |
 | Acquisition gateway | [`axon-bci-gateway`](https://github.com/AxonOS-org/axon-bci-gateway) | OpenBCI GUI integration fork for EEG input |
 
@@ -321,7 +317,7 @@ The test vectors are CC0 specifically so any independent implementation — in a
 
 <div align="center">
 
-**axonos-consent · v0.5.0 · multi-party co-authorisation**
+**axonos-consent · multi-party co-authorisation**
 
 Singapore · Zurich · Berlin · Milano · San Mateo
 

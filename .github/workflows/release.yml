@@ -1,0 +1,89 @@
+# AxonOS Consent — Auto-release on tag push
+# Pushing a tag like v0.7.0 creates a GitHub Release with the matching
+# CHANGELOG section as the body and source archives attached.
+
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+      - 'v*.*.*-*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract version from tag
+        id: tag
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/}"
+          VERSION_NUMBER="${VERSION#v}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "version_number=$VERSION_NUMBER" >> "$GITHUB_OUTPUT"
+          if [[ "$VERSION" == *-* ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Extract CHANGELOG section
+        id: changelog
+        run: |
+          VER="${{ steps.tag.outputs.version_number }}"
+          BODY=""
+          if [ -f CHANGELOG.md ]; then
+            BODY=$(awk -v ver="$VER" '
+              $0 ~ "^## \\[" ver "\\]" { capture=1; print; next }
+              capture && /^## \[[0-9]+\.[0-9]+\.[0-9]+\]/ { exit }
+              capture { print }
+            ' CHANGELOG.md)
+          fi
+          if [ -z "$BODY" ]; then
+            BODY="Release ${{ steps.tag.outputs.version }}. See [CHANGELOG.md](./CHANGELOG.md) for details."
+          fi
+          {
+            echo "body<<CHANGELOG_EOF"
+            echo "$BODY"
+            echo ""
+            echo "---"
+            echo ""
+            echo "**Full changelog:** [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/${{ steps.tag.outputs.version }}/CHANGELOG.md)"
+            echo "CHANGELOG_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build source archives
+        run: |
+          VERSION="${{ steps.tag.outputs.version }}"
+          git archive --format=tar.gz \
+            --prefix="axonos-consent-${{ steps.tag.outputs.version_number }}/" \
+            -o "axonos-consent-${VERSION}.tar.gz" "$VERSION"
+          git archive --format=zip \
+            --prefix="axonos-consent-${{ steps.tag.outputs.version_number }}/" \
+            -o "axonos-consent-${VERSION}.zip" "$VERSION"
+          ls -lh "axonos-consent-${VERSION}.tar.gz" "axonos-consent-${VERSION}.zip"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.version }}
+          name: ${{ steps.tag.outputs.version }}
+          body: ${{ steps.changelog.outputs.body }}
+          draft: false
+          prerelease: ${{ steps.tag.outputs.prerelease }}
+          make_latest: ${{ steps.tag.outputs.prerelease == 'false' && 'true' || 'false' }}
+          files: |
+            axonos-consent-${{ steps.tag.outputs.version }}.tar.gz
+            axonos-consent-${{ steps.tag.outputs.version }}.zip
+          fail_on_unmatched_files: true
+          generate_release_notes: false
