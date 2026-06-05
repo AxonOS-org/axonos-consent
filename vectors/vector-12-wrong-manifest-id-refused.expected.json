@@ -1,0 +1,11 @@
+{
+  "description": "FSM refusal: event manifest_id 0x0002 does not match the context manifest 0x0001.",
+  "layer": "transition",
+  "from_state": "Granted",
+  "context_manifest_id": 1,
+  "input_len": 16,
+  "verdict": "refuse",
+  "error": "ManifestMismatch",
+  "error_message": "event manifest ID does not match",
+  "post_state": null
+}

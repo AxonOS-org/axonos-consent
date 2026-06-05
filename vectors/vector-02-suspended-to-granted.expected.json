@@ -1,0 +1,11 @@
+{
+  "description": "Admissible Suspended -> Granted (resume).",
+  "layer": "transition",
+  "from_state": "Suspended",
+  "context_manifest_id": 1,
+  "input_len": 16,
+  "verdict": "accept",
+  "error": null,
+  "error_message": null,
+  "post_state": "Granted"
+}

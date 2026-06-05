@@ -1,0 +1,11 @@
+{
+  "description": "Decode failure: 17-byte buffer (one long).",
+  "layer": "decode",
+  "from_state": null,
+  "context_manifest_id": null,
+  "input_len": 17,
+  "verdict": "refuse",
+  "error": "WireFormatLength",
+  "error_message": "wire-format length not exactly 16 bytes",
+  "post_state": null
+}

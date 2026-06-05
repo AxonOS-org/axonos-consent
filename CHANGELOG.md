@@ -4,6 +4,30 @@ All notable changes to `axonos-consent` are documented here. Format based on [Ke
 
 ---
 
+## [0.8.0] — 2026-06-05
+
+### Added
+- **Populated the conformance vector set.** The `vectors/` directory previously
+  contained only its `README.md` and `LICENSE`; the twelve vectors the README
+  described had never been committed. This release ships all twelve as
+  `vector-NN-*.bin` + `vector-NN-*.expected.json`, generated from and byte-for-byte
+  consistent with the reference decoder and state machine (`src/wire.rs`,
+  `src/state.rs`, `src/error.rs`): five admissible transitions, the two terminal
+  refusals, reserved-discriminant and reserved-flag-bit decode failures, the
+  undersize/oversize length refusals, and a manifest-mismatch refusal.
+- **`vectors/SHA256SUMS`** over every vector file, verifiable with `sha256sum -c`.
+
+### Changed
+- **Rewrote `vectors/README.md`** into a precise specification: the 16-byte
+  little-endian record layout, the flags mask, the normative decode order, the
+  `.expected.json` schema, the canonical test context, the full vector index, and
+  a reference harness algorithm.
+
+### Notes
+- No library, public-API, or wire-format change. The vectors describe the
+  existing wire format and three-state machine (stable since the v0.3.0
+  specification); they are conformance data, not a behavioural change.
+
 ## [0.7.0] — 2026-06-04
 
 ### Added

@@ -1,0 +1,11 @@
+{
+  "description": "Decode failure: reserved state discriminant 0x00.",
+  "layer": "decode",
+  "from_state": null,
+  "context_manifest_id": null,
+  "input_len": 16,
+  "verdict": "refuse",
+  "error": "ReservedDiscriminant",
+  "error_message": "reserved state discriminant",
+  "post_state": null
+}

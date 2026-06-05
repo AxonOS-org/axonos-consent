@@ -1,0 +1,11 @@
+{
+  "description": "Inadmissible Withdrawn -> Granted (Withdrawn is terminal).",
+  "layer": "transition",
+  "from_state": "Withdrawn",
+  "context_manifest_id": 1,
+  "input_len": 16,
+  "verdict": "refuse",
+  "error": "InadmissibleTransition",
+  "error_message": "inadmissible transition",
+  "post_state": null
+}

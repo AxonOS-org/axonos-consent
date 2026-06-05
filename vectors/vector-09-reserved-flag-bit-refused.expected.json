@@ -1,0 +1,11 @@
+{
+  "description": "Decode failure: reserved flag bit 7 set (outside the defined mask 0x0F).",
+  "layer": "decode",
+  "from_state": null,
+  "context_manifest_id": null,
+  "input_len": 16,
+  "verdict": "refuse",
+  "error": "ReservedFlagBit",
+  "error_message": "reserved flag bit set",
+  "post_state": null
+}
