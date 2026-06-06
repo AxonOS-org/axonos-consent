@@ -1,6 +1,6 @@
 [package]
 name = "axonos-consent"
-version = "0.7.0"
+version = "0.8.0"
 edition = "2021"
 rust-version = "1.75"
 authors = ["Denis Yermakou <connect@axonos.org>"]
@@ -33,7 +33,7 @@ default = []
 std = []
 
 [dependencies]
-# All dependencies are no_std-compatible; the crate carries no external dependencies at v0.4.0.
+# All dependencies are no_std-compatible; the crate carries no external dependencies.
 
 [profile.release]
 codegen-units = 1

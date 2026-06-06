@@ -1,0 +1,30 @@
+# SPDX-License-Identifier: Apache-2.0 OR MIT
+# Scheduled supply-chain scanning and pull-request dependency review.
+# Complements ci.yml (which runs cargo-deny on push); this re-scans on a weekly
+# schedule to catch newly disclosed advisories against unchanged dependencies,
+# and reviews dependency changes on pull requests.
+name: security
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  advisories:
+    name: cargo-deny (advisories, bans, licences, sources)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check
+  dependency-review:
+    name: Dependency review
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/dependency-review-action@v4

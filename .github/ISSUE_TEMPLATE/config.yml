@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/AxonOS-org/axonos-consent/security/policy
+    about: Do not open a public issue. Email security@axonos.org per the security policy.
+  - name: AxonOS Standard (specification)
+    url: https://github.com/AxonOS-org/axonos-standard
+    about: Normative requirements this crate implements (Sections 15 and 16).
+  - name: General questions
+    url: mailto:connect@axonos.org
+    about: For questions that are not bugs or feature requests.

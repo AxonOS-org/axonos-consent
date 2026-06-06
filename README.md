@@ -291,6 +291,14 @@ The single-party `ConsentMachine` is unchanged; multi-party is opt-in by using
 
 ---
 
+## Contributing
+
+Contributions are welcome under a high bar appropriate to safety-relevant
+infrastructure. See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the development
+environment, the local gate, the evidence discipline, and the cognitive-data
+rule, and [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md). Report vulnerabilities
+privately per [`SECURITY.md`](./SECURITY.md) — never in a public issue.
+
 ## Authorship
 
 This repository is authored solely by **Denis Yermakou** — AxonOS Project, Singapore.

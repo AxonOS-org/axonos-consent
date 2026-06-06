@@ -1,0 +1,51 @@
+name: Bug report
+description: Report a defect in axonos-consent
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include real neural data, secrets, or private keys. Use synthetic data only.
+        For exploitable vulnerabilities, do not file here — email security@axonos.org (see SECURITY.md).
+  - type: input
+    id: version
+    attributes:
+      label: Crate version
+      description: Output of the version, or the release tag / commit hash.
+      placeholder: "0.8.0 (or commit sha)"
+    validations:
+      required: true
+  - type: input
+    id: toolchain
+    attributes:
+      label: OS and toolchain
+      placeholder: "Ubuntu 24.04, rustc 1.83.0"
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction steps
+      description: Minimal steps, using synthetic data only.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or output
+      description: Redact anything sensitive. No raw signal payloads.
+      render: text
+    validations:
+      required: false

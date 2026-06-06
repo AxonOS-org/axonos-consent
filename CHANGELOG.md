@@ -4,7 +4,13 @@ All notable changes to `axonos-consent` are documented here. Format based on [Ke
 
 ---
 
-## [0.8.0] — 2026-06-05
+## [Unreleased]
+
+_No unreleased changes._
+
+---
+
+## [0.8.0] — 2026-06-06
 
 ### Added
 - **Populated the conformance vector set.** The `vectors/` directory previously
@@ -16,12 +22,25 @@ All notable changes to `axonos-consent` are documented here. Format based on [Ke
   refusals, reserved-discriminant and reserved-flag-bit decode failures, the
   undersize/oversize length refusals, and a manifest-mismatch refusal.
 - **`vectors/SHA256SUMS`** over every vector file, verifiable with `sha256sum -c`.
+- **Foundation-grade contribution surface.** Added `CONTRIBUTING.md`,
+  `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1), a pull-request template, and
+  structured issue forms (bug report, feature request, security-boundary
+  discussion, and a config that routes vulnerabilities to the security policy).
+- **Supply-chain workflow.** Added `.github/workflows/security.yml`
+  (cargo-deny, cargo-audit, dependency review) and `.github/dependabot.yml` for
+  the cargo and github-actions ecosystems.
+- **Documentation.** Added `docs/privacy-boundary.md` and
+  `docs/release-process.md`; added a `clippy.toml` pinning the MSRV.
 
 ### Changed
 - **Rewrote `vectors/README.md`** into a precise specification: the 16-byte
   little-endian record layout, the flags mask, the normative decode order, the
   `.expected.json` schema, the canonical test context, the full vector index, and
   a reference harness algorithm.
+- Bumped the crate version to 0.8.0, aligning `Cargo.toml` with `CITATION.cff`
+  and the changelog, and modernised two repository-verifier checks
+  (`cargo-manifest`, `changelog`) to be version-agnostic rather than pinned to
+  stale tokens.
 
 ### Notes
 - No library, public-API, or wire-format change. The vectors describe the
