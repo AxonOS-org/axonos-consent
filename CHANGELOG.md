@@ -4,11 +4,48 @@ All notable changes to `axonos-consent` are documented here. Format based on [Ke
 
 ---
 
-## [Unreleased]
+## [Unreleased] — evidence correction, 2026-08-16
 
-_No unreleased changes._
+### Corrected
 
----
+- **The ≤ 1648 cycle bound was mistagged `L1 (Kani-proven)`.** It appeared that
+  way in `README.md`, in `SPEC.md` §4.1–§4.4, and in the `handle_event()` doc
+  comment, and SPEC §4.1 named `handle_withdraw_terminates` as the harness
+  backing it. That harness proves termination and target-state correctness and
+  contains no cycle assertion; Kani is a bounded model checker over Rust MIR and
+  cannot produce a Cortex-M cycle count. The figure is an analytical bound
+  derived by instruction counting and is now tagged `analytical` everywhere,
+  with the derivation artefact marked pending publication.
+- **The harness doc comment claimed coverage it does not have.** It stated
+  "≤ 1648 cycles for any starting state". `starting_state` is generated and
+  constrained, but `ConsentMachine::new()` always constructs the default state,
+  so only the `Granted` transition is exercised. The comment now says so.
+
+- **SPEC §7.3 cited Kani as proving constant-time verification.** It does not,
+  and cannot: constant-timeness is a timing/side-channel property outside the
+  reach of a bounded model checker over MIR. The harness
+  `signature_verification_constant_time` proves only that `ct_eq_u32` is
+  functionally equivalent to `==`, and covers the 4-byte truncated tag rather
+  than the Ed25519 path. §7.3 is now recorded as an unverified requirement.
+- **Two further harness doc comments overstated their scope.**
+  `cbor_decoder_bounded` claimed depth bounds it does not assert;
+  `fsm_no_invalid_transitions` claimed a reachability result over wire inputs
+  when it checks the pure admissibility predicate. Both corrected.
+  `co_authorisation_requires_two_parties` was audited and states its scope
+  correctly; it is unchanged.
+
+### Open
+
+- Extend `handle_withdraw_terminates` to the `Suspended` and `Withdrawn`
+  starting states.
+- Cover depth and string-length bounds in `cbor_decoder_bounded`.
+- Choose and apply a timing-aware method for the §7.3 constant-time requirement.
+- Publish the instruction-count derivation behind the 1648 figure, or withdraw
+  the figure.
+
+No measured (L2) figure changes as a result of this correction. Per the AxonOS
+Standard re-grading and retraction policy, the notice in `README.md` is
+permanent.
 
 ## [0.8.0] — 2026-06-06
 

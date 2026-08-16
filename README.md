@@ -15,7 +15,7 @@
 [![Verified](https://img.shields.io/badge/Verified-Kani%20BMC%20%C3%975-0d7a5f?style=flat-square)](./kani/)
 [![Unsafe](https://img.shields.io/badge/Unsafe-forbidden-0d7a5f?style=flat-square)](./src/lib.rs)
 [![Critical path](https://img.shields.io/badge/Critical%20path-0%20alloc-0d7a5f?style=flat-square)](./SPEC.md#4-timing-bounds)
-[![WCRT](https://img.shields.io/badge/WCRT-%E2%89%A4%201648%20cycles-0d7a5f?style=flat-square)](./SPEC.md#4-timing-bounds)
+[![Cycle bound](https://img.shields.io/badge/Cycle%20bound-%E2%89%A4%201648%20%C2%B7%20analytical-8a6100?style=flat-square)](./SPEC.md#4-timing-bounds)
 
 [![License (code)](https://img.shields.io/badge/License%20code-Apache--2.0%20OR%20MIT-475569?style=flat-square)](./LICENSE)
 [![License (spec)](https://img.shields.io/badge/License%20spec-CC--BY--SA--4.0-475569?style=flat-square)](./LICENSE-CC-BY-SA)
@@ -66,11 +66,24 @@ This is a **standalone subsystem of the AxonOS Project**. No external co-authors
 
 ## Performance envelope (reference hardware: STM32F407 @ 168 MHz)
 
+> **Correction, published 2026-08-16.** Until this revision the ≤ 1648 cycle
+> bound was tagged `L1 (Kani-proven)` here, in `SPEC.md` §4.1 and in the
+> `handle_event()` doc comment, and SPEC §4.1 named
+> `handle_withdraw_terminates` as the harness backing it. That harness proves
+> termination and target-state correctness; it contains no cycle assertion,
+> and Kani cannot produce one. The cycle figure is an analytical bound derived
+> by instruction counting, and is now tagged as such. Separately, the harness
+> exercises the `Granted` starting state only, although its doc comment said
+> "any starting state" — corrected, and the coverage gap is recorded as open.
+> Nothing about the measured L2 figures below changes. Per the AxonOS
+> Standard, this notice is permanent.
+
 | Property | Value | Evidence level |
 |:---|---:|:---:|
-| Cycles per transition (upper bound) | **≤ 1648** | L1 (Kani-proven) |
-| Wall-clock per transition (upper bound) | **≤ 9.8 µs** | L1 |
-| End-to-end withdrawal → stream termination | **≤ 10 ms** | L1 composition |
+| Cycles per transition (upper bound) | **≤ 1648** | analytical — instruction-count derived, derivation pending |
+| Wall-clock per transition (upper bound) | **≤ 9.8 µs** | analytical — the cycle bound at 168 MHz |
+| Transition terminates, target state correct | proven | **L1** — Kani `handle_withdraw_terminates` |
+| End-to-end withdrawal → stream termination | **≤ 10 ms** | composed, see SPEC §4.2 |
 | Median (measured, 18-h soak, 12 × 10⁶ events) | 1098 cycles · ≈ 6.5 µs | L2 |
 | 99.9th percentile (measured) | 1487 cycles · ≈ 8.85 µs | L2 |
 | Worst observed (measured) | 1503 cycles · ≈ 8.95 µs | L2 |

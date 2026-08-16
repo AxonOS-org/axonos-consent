@@ -1,6 +1,10 @@
-//! Kani harness: no sequence of wire-format inputs can drive the FSM through
-//! a non-admissible transition. Specifically: from Withdrawn, no input can
-//! reach Granted or Suspended.
+//! Kani harness: the transition-admissibility table has the shape SPEC §3.2
+//! requires — in particular, nothing is admissible out of `Withdrawn`.
+//!
+//! Scope: this checks the pure predicate `is_admissible_transition` over the
+//! full 3×3 state space. It does **not** exercise wire-format inputs or the
+//! FSM itself, so it is not a reachability proof over decoded events;
+//! `handle_withdraw_terminates` covers the event path, from `Granted` only.
 
 use axonos_consent::ConsentState;
 use axonos_consent::state::is_admissible_transition;

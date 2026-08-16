@@ -75,7 +75,10 @@ impl ConsentMachine {
 
     /// Process one trusted-path event. Returns the resulting state on success.
     ///
-    /// SPEC §4.1: the bound on this function is ≤ 1648 cycles, L1-proven by Kani.
+    /// SPEC §4.1: the analytical bound on this function is ≤ 1648 cycles
+    /// (instruction-count derived, not a Kani output). The Kani harness
+    /// `handle_withdraw_terminates` proves termination and target-state
+    /// correctness, which is the L1 claim.
     pub fn handle_event(&mut self, event: ConsentEvent) -> Result<ConsentState, ConsentError> {
         if event.manifest_id != self.manifest_id {
             return Err(ConsentError::ManifestMismatch);

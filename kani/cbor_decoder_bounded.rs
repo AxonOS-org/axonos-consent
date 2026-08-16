@@ -1,5 +1,9 @@
-//! Kani harness: the CBOR-shape wire decoder enforces depth and length bounds,
-//! and refuses any input not of the exact wire size.
+//! Kani harness: the wire decoder refuses any input that is not exactly
+//! `WIRE_SIZE` bytes.
+//!
+//! Scope: this harness asserts the *length* rejection only. Depth and
+//! string-length bounds are enforced in the decoder but are not covered here;
+//! extending this harness to them is an open item.
 
 use axonos_consent::error::ConsentError;
 use axonos_consent::wire::{ConsentEvent, WIRE_SIZE};

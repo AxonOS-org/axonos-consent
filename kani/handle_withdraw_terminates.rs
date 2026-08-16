@@ -1,7 +1,19 @@
-//! Kani harness: `handle_event()` for a Withdraw transition terminates in
-//! ≤ 1648 cycles for any starting state.
+//! Kani harness: `handle_event()` on a terminal Withdraw frame terminates
+//! under bounded unwinding and yields `Withdrawn`.
 //!
-//! This is the L1 evidence backing SPEC §4.1.
+//! Scope of this harness, stated precisely:
+//!
+//! * It proves **termination and target-state correctness**. This is the L1
+//!   evidence backing the correctness clause of SPEC §4.1.
+//! * It does **not** establish the ≤ 1648 cycle bound. Kani is a bounded
+//!   model checker over Rust MIR; it does not compute Cortex-M cycle counts.
+//!   That bound is analytical (instruction-count derived) and is tagged as
+//!   such in SPEC §4.1.
+//! * It exercises the transition from `Granted` only. `starting_state` is
+//!   generated and constrained below, but `ConsentMachine::new()` always
+//!   constructs the default state, so the other two starting states are not
+//!   covered. Extending coverage to `Suspended` and `Withdrawn` is a known
+//!   open item, tracked in CHANGELOG under the 2026-08-16 correction.
 
 use axonos_consent::wire::FLAG_TERMINAL;
 use axonos_consent::{ConsentEvent, ConsentMachine, ConsentState};

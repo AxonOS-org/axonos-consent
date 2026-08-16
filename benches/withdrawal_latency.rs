@@ -1,6 +1,7 @@
 //! L2 benchmark: withdrawal latency on the host CPU.
 //!
-//! Reference hardware bound is ≤ 1648 cycles (≈ 9.8 µs at 168 MHz Cortex-M4F).
+//! Reference hardware analytical bound is ≤ 1648 cycles (≈ 9.8 µs at 168 MHz
+//! Cortex-M4F). See SPEC §4.1 for what backs that figure and what does not.
 //! Host CPUs are much faster, so this bench measures a lower bound; useful for
 //! catching regressions.
 

@@ -170,9 +170,26 @@ Re-applying the current state through the trusted path **MUST** succeed without 
 
 ### 4.1 The cycle bound
 
-The state-machine transition function (the function in the reference implementation called `handle_event()`) **MUST** complete in **≤ 1648 CPU cycles** measured on the reference hardware (ARM Cortex-M4F at 168 MHz, equivalent to **≤ 9.8 µs**). The bound applies to any admissible input, including non-trivial transitions and idempotent re-applications.
+The state-machine transition function (the function in the reference implementation called `handle_event()`) **MUST** complete in **≤ 1648 CPU cycles** on the reference hardware (ARM Cortex-M4F at 168 MHz, equivalent to **≤ 9.8 µs**). The bound applies to any admissible input, including non-trivial transitions and idempotent re-applications.
 
-This bound is L1 (Kani-proven) per the [AxonOS Standard validation taxonomy](https://github.com/AxonOS-org/axonos-standard/blob/main/VALIDATION.md). The reference Kani harness is `kani::handle_withdraw_terminates`.
+**Evidence, stated precisely.** Two distinct claims live in this section and
+they carry different evidence:
+
+1. **The cycle figure (≤ 1648)** is an *analytical* bound, derived by
+   instruction counting against the ISA timing reference. The derivation
+   artefact is pending publication. It is **not** a Kani output. Kani is a
+   bounded model checker over Rust MIR and does not compute Cortex-M cycle
+   counts; a harness cannot produce a wall-clock or cycle bound.
+2. **Termination and target-state correctness** is **L1** per the
+   [AxonOS Standard validation taxonomy](https://github.com/AxonOS-org/axonos-standard/blob/main/VALIDATION.md),
+   backed by the Kani harness `handle_withdraw_terminates`. That harness
+   proves `handle_event()` terminates under bounded unwinding and yields
+   `Withdrawn` on a terminal Withdraw frame.
+
+At this revision the harness exercises the transition from `Granted` only;
+extending it to the `Suspended` and `Withdrawn` starting states is a known
+open item. Until the cycle-bound derivation is published and the harness
+covers all three states, §4.1 must not be cited as a proven timing bound.
 
 ### 4.2 The wall-clock bound
 
@@ -182,7 +199,7 @@ This bound is composed of three sub-bounds:
 
 | Component | Sub-bound | Evidence |
 |:---|:---:|:---:|
-| State-machine transition itself (§4.1) | ≤ 9.8 µs | L1 (Kani) |
+| State-machine transition itself (§4.1) | ≤ 9.8 µs | analytical |
 | Kernel IPC ring-buffer producer-side termination | ≤ 1 scheduler tick ≈ 4 ms | L1 |
 | SDK observation iterator returning `StreamTerminated` | ≤ 1 SDK poll period ≈ 4 ms | L2 |
 | **Sum** | ≤ 10 ms | composed |
@@ -196,13 +213,13 @@ The reference implementation at v0.3.0 measures, on the reference hardware over 
 | Median withdrawal cycles | 1098 (≈ 6.5 µs) |
 | 99.9th percentile cycles | 1487 (≈ 8.85 µs) |
 | Worst observed cycles | 1503 (≈ 8.95 µs) |
-| Kani-proven upper bound | 1648 (9.81 µs) |
+| Analytical upper bound (§4.1) | 1648 (9.81 µs) |
 
-All measurements within the L1 bound; no counterexamples produced by Kani at the published harness.
+All measurements fall within the analytical bound of §4.1. Kani produced no counterexample at the published correctness harness.
 
 ### 4.4 Bounds on adverse machine state
 
-The L1 bound is robust under the following adverse conditions:
+The analytical bound of §4.1 is intended to hold under the following adverse conditions:
 
 - Cache cold-start (instruction and data caches both invalidated).
 - Branch-predictor misses on the transition's control flow.
@@ -306,7 +323,19 @@ The 4-byte truncated tag has collision resistance of ~ 2^32 against **accidental
 
 ### 7.3 Constant-time verification
 
-The full Ed25519 verification path **MUST** be constant-time with respect to the signature value. This is L1-proven by Kani harness `signature_verification_constant_time`.
+The full Ed25519 verification path **MUST** be constant-time with respect to the signature value.
+
+**Evidence, stated precisely.** This requirement is **not** currently backed by a
+proof and must not be cited as L1. Constant-time execution is a timing and
+side-channel property; Kani is a bounded model checker over Rust MIR and cannot
+establish it. The harness `signature_verification_constant_time` proves a
+narrower, purely functional claim: that the branchless comparison
+`ct_eq_u32(a, b)` returns the same result as `a == b` for all inputs. It covers
+the 4-byte truncated tag, not the Ed25519 path, and it says nothing about
+execution time. Establishing the requirement above needs a timing-aware method
+— binary-level analysis, dudect-style statistical testing, or a
+secret-independence type system. Until one is applied, §7.3 is an unverified
+requirement on implementers.
 
 The reference implementation defers actual point-arithmetic to the [ATECC608B secure element](https://www.microchip.com/en-us/product/ATECC608B), which provides hardware-side-channel-resistant Ed25519. Implementations that perform Ed25519 in software **MUST** use a constant-time implementation (e.g., `ed25519-dalek` with the `zeroize` feature enabled).
 
@@ -372,7 +401,7 @@ An implementation is **conformant with the AxonOS Consent v0.5.0 baseline profil
 
 1. Models consent as the three-state FSM of §2.
 2. Admits exactly the five transitions of §3.1 and refuses all others.
-3. Satisfies the cycle bound of §4.1 (≤ 1648 cycles, L1-proven).
+3. Satisfies the cycle bound of §4.1 (≤ 1648 cycles, analytical).
 4. Satisfies the wall-clock bound of §4.2 (≤ 10 ms wall-clock from withdrawal to stream termination).
 5. Implements the trusted-path requirements of §5.
 6. Implements the wire format of §6 bit-exactly.
