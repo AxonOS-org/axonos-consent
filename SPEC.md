@@ -4,7 +4,6 @@
 
 **Author:** Denis Yermakou
 **Project:** AxonOS
-**Domicile:** Singapore
 **License:** [CC-BY-SA-4.0](./LICENSE-CC-BY-SA) (specification text) · [Apache-2.0 OR MIT](./LICENSE) (reference code)
 
 ---
@@ -557,7 +556,7 @@ party-distinctness requirement of §12.3 is verified by the Kani harness
 
 ## Authorship and licensing
 
-**Author:** Denis Yermakou. Singapore.
+**Author:** Denis Yermakou.
 
 **Specification text:** Released under [CC-BY-SA-4.0](./LICENSE-CC-BY-SA).
 **Reference code:** Released under [Apache-2.0 OR MIT](./LICENSE).
@@ -566,12 +565,10 @@ This is a solo specification of the AxonOS Project. There are no external co-aut
 
 Cite as:
 
-> Yermakou, D. (2026). *AxonOS Consent Specification, version 0.4.0.* AxonOS Project, Singapore. CC-BY-SA-4.0. https://github.com/AxonOS-org/axonos-consent
+> Yermakou, D. (2026). *AxonOS Consent Specification, version 0.4.0.* The AxonOS Project. CC-BY-SA-4.0. https://github.com/AxonOS-org/axonos-consent
 
 A BibTeX entry is available in [`docs/citation.bib`](./docs/citation.bib).
 
 ---
 
 **End of SPEC.md.**
-
-Singapore · Zurich · Berlin · Milano · San Mateo

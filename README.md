@@ -31,7 +31,7 @@
 
 ## What this repository is
 
-1. The **[AxonOS Consent Specification](./SPEC.md)** — a solo specification by Denis Yermakou, defining the kernel-level state machine that mediates user permission for `IntentObservation` flow in a conformant AxonOS deployment.
+1. The **[AxonOS Consent Specification](./SPEC.md)** — a specification by Denis Yermakou, defining the kernel-level state machine that mediates user permission for `IntentObservation` flow in a conformant AxonOS deployment.
 2. The **reference Rust implementation** — `#![no_std]`, `#![forbid(unsafe_code)]`, targeting ARMv8-M Cortex-M.
 3. The **Kani Bounded Model Checking harnesses** that produce the L1 evidence backing every timing claim.
 4. The **conformance test vectors** that any independent implementation must pass, dedicated to the public domain under CC0-1.0.
@@ -314,7 +314,7 @@ privately per [`SECURITY.md`](./SECURITY.md) — never in a public issue.
 
 ## Authorship
 
-This repository is authored solely by **Denis Yermakou** — AxonOS Project, Singapore.
+This repository is authored by **Denis Yermakou** — The AxonOS Project.
 
 - Specification text: [SPEC.md](./SPEC.md) — Denis Yermakou.
 - Reference implementation: same author, same project.
@@ -339,7 +339,5 @@ The test vectors are CC0 specifically so any independent implementation — in a
 <div align="center">
 
 **axonos-consent · multi-party co-authorisation**
-
-Singapore · Zurich · Berlin · Milano · San Mateo
 
 </div>

@@ -24,8 +24,8 @@
 //!
 //! # Authorship
 //!
-//! Solo specification and reference implementation by **Denis Yermakou**.
-//! AxonOS Project, Singapore.
+//! Specification and reference implementation by **Denis Yermakou**.
+//! The AxonOS Project.
 //!
 //! # License
 //!
