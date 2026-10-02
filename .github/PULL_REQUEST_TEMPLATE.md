@@ -16,9 +16,9 @@
 - [ ] `cargo fmt --all --check` passes
 - [ ] `cargo clippy --all-features --all-targets -- -D warnings` passes
 - [ ] `cargo test --all-features` and `--no-default-features` pass
-- [ ] `python3 tools/verify_consent_repository.py` checks pass
-- [ ] Formal harnesses re-run if the FSM / wire / crypto surface changed
-- [ ] Conformance vectors regenerated and `sha256sum -c` verified if the wire format changed
+- [ ] `python3 tools/check.py` passes
+- [ ] `cargo kani --no-default-features` and the loom models re-run if the wire, auth, FSM or gate changed
+- [ ] Vectors regenerated (`gen_vectors`, `tools/check.py --write`) if the wire format or an outcome changed
 - [ ] `CHANGELOG.md` updated under `## [Unreleased]`
 - [ ] Version impact considered (the crate is `0.y.z`; breaking changes called out)
 - [ ] Security impact reviewed

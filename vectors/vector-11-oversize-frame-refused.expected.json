@@ -1,0 +1,15 @@
+{
+  "vector": "vector-11-oversize-frame-refused",
+  "about": "97 bytes",
+  "profile": "single-party",
+  "wire_version": 2,
+  "manifest_id": 7,
+  "trusted_key": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+  "initial_state": "Granted",
+  "initial_sequence": 0,
+  "frame_len": 97,
+  "result": "refuse",
+  "state_after": "Granted",
+  "error": "WireFormatLength",
+  "abi_code": "0x07"
+}

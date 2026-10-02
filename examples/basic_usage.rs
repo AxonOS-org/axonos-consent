@@ -1,56 +1,77 @@
-//! Basic usage of the consent state machine.
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+// SPDX-FileCopyrightText: 2026 Denis Yermakou <connect@axonos.org>
+
+//! One installation, from boot to withdrawal.
 //!
-//! Run with: `cargo run --example basic_usage --features std`
+//! `cargo run --example basic_usage --features std`
 
-use axonos_consent::crypto::compute_tag;
-use axonos_consent::interlock::ObservationGate;
-use axonos_consent::wire::{FLAG_REPLAY_TOLERANT, FLAG_TERMINAL};
-use axonos_consent::{ConsentEvent, ConsentMachine};
+use axonos_consent::wire::{assemble, ConsentRecord};
+use axonos_consent::{ConsentError, ConsentMachine, ConsentState, Ed25519Strict};
+use ed25519_dalek::{Signer, SigningKey};
 
-fn main() {
-    println!("=== AxonOS Consent — basic usage example ===\n");
+fn main() -> Result<(), ConsentError> {
+    // The trusted path holds the signing key. The kernel holds only the
+    // public half, and that is all it ever needs.
+    let trusted_path = SigningKey::from_bytes(&[0x42; 32]);
+    let sign =
+        |record: ConsentRecord| assemble(&record, &trusted_path.sign(&record.encode()).to_bytes());
+    let manifest = 7;
+    let mut machine = ConsentMachine::new(
+        manifest,
+        trusted_path.verifying_key().to_bytes(),
+        Ed25519Strict,
+    )?;
+    println!("installed         {:?}", machine.state());
 
-    // 1. Set up a machine for manifest #42 with a trusted-path public key.
-    let trusted_path_pubkey = [0xC0u8; 32];
-    let mut machine = ConsentMachine::new(42, trusted_path_pubkey);
-    println!("Fresh machine: state = {:?}", machine.state());
-    println!("  IPC publishes? {}\n", machine.should_publish());
+    // The publication path commits through the gate.
+    println!("publish           {:?}", machine.gate().try_publish());
 
-    // 2. User suspends consent via the trusted path.
-    let suspend_event = build_event(0x02, 42, &trusted_path_pubkey, 0);
-    let new_state = machine.handle_event(suspend_event).unwrap();
-    println!("After Suspend: state = {:?}", new_state);
-    println!("  IPC publishes? {}", machine.should_publish());
-    println!("  Suppression code: 0x{:02X}\n", machine.suppression_code());
+    machine.handle(&sign(ConsentRecord::new(
+        ConsentState::Suspended,
+        manifest,
+        1,
+        1_000,
+    )))?;
+    println!("pause             {:?}", machine.state());
+    println!("publish           {:?}", machine.gate().try_publish());
 
-    // 3. User resumes consent.
-    let resume_event = build_event(0x01, 42, &trusted_path_pubkey, FLAG_REPLAY_TOLERANT);
-    machine.handle_event(resume_event).unwrap();
-    println!("After Resume: state = {:?}", machine.state());
-    println!("  IPC publishes? {}\n", machine.should_publish());
+    machine.handle(&sign(ConsentRecord::new(
+        ConsentState::Granted,
+        manifest,
+        2,
+        2_000,
+    )))?;
+    println!("resume            {:?}", machine.state());
 
-    // 4. User withdraws consent — terminal.
-    let withdraw_event = build_event(0x03, 42, &trusted_path_pubkey, FLAG_TERMINAL);
-    machine.handle_event(withdraw_event).unwrap();
-    println!("After Withdraw: state = {:?}", machine.state());
-    println!("  IPC publishes? {}", machine.should_publish());
-    println!("  Suppression code: 0x{:02X}\n", machine.suppression_code());
+    let withdrawal = sign(ConsentRecord::new(
+        ConsentState::Withdrawn,
+        manifest,
+        3,
+        3_000,
+    ));
+    machine.handle(&withdrawal)?;
+    println!("withdraw          {:?}", machine.state());
+    println!("publish           {:?}", machine.gate().try_publish());
 
-    // 5. Attempt to restore — refused.
-    let restore_attempt = build_event(0x01, 42, &trusted_path_pubkey, 0);
-    let outcome = machine.handle_event(restore_attempt);
-    println!("Attempt to restore from Withdrawn: {:?}", outcome);
-    println!("  State unchanged: {:?}", machine.state());
-}
-
-fn build_event(state: u8, mid: u16, pk: &[u8; 32], flags: u8) -> ConsentEvent {
-    let mut e = ConsentEvent {
-        state,
-        flags,
-        manifest_id: mid,
-        timestamp_us: 1_700_000_000_000_000,
-        sig_truncated: 0,
-    };
-    e.sig_truncated = compute_tag(&e, pk);
-    e
+    // What the machine refuses.
+    println!("replay            {:?}", machine.handle(&withdrawal));
+    let mut forged = sign(ConsentRecord::new(
+        ConsentState::Granted,
+        manifest,
+        4,
+        4_000,
+    ));
+    forged[40] ^= 1;
+    println!("forged signature  {:?}", machine.handle(&forged));
+    println!(
+        "leave Withdrawn   {:?}",
+        machine.handle(&sign(ConsentRecord::new(
+            ConsentState::Granted,
+            manifest,
+            5,
+            5_000
+        )))
+    );
+    println!("persist           {:?}", machine.persisted());
+    Ok(())
 }

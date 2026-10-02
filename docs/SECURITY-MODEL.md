@@ -1,81 +1,58 @@
-# Security model (informative)
+# Security model
 
-This document expands on the threat model in SPEC §11. It is **informative**;
-SPEC §11 is normative.
+What `axonos-consent` protects, from whom, how, and on what evidence. The
+normative threat model is [SPEC §11](../SPEC.md#11-threat-model); this page is
+the engineer's view of it.
 
----
+## Assets
 
-## 1. What is being defended
+1. **The consent decision** — whether a manifest's observations may flow.
+2. **Its timeliness** — a withdrawal must take effect at once, not eventually.
+3. **Its permanence** — a withdrawal must not be undone through the same
+   installation.
 
-The consent subsystem defends the user's ability to **revoke or pause** the
-flow of `IntentObservation` from kernel to application. The defended property
-is: "after the user signals withdrawal through the trusted path, no further
-observation reaches the application within 10 ms wall-clock time."
+## Adversaries
 
-## 2. The trust anchors
+| Adversary | Can | Cannot |
+|:--|:--|:--|
+| Network or IPC attacker | deliver arbitrary bytes to the consent path; knows the public keys | sign with a trusted-path key |
+| Replayer | resend any frame ever seen, before or after a reboot | change a signed byte |
+| Relabeller | present a guardian frame as the patient's, or the reverse | re-sign it |
+| Clock manipulator | choose the timestamp inside a frame it signs | move the kernel's clock |
+| Fault | corrupt the stored state, or the gate word | — |
+| Application | request anything through the SDK | reach the trusted path |
 
-The subsystem trusts:
+## Four layers, four properties
 
-- The **kernel** to honour the state machine and the publication gate.
-- The **trusted path** to deliver only events that actually came from the user.
-- The **secure element** to protect the trusted-path public key from extraction.
+| Layer | Property | Evidence |
+|:--|:--|:--|
+| Wire | Decoding is total; an accepted record has exactly one encoding | Kani; fuzz `frame_decode` |
+| Authentication | No field of an unauthenticated record influences anything but its own refusal | Kani; 768-bit flip test; fuzz `auth_forgery` |
+| Sequence and FSM | No frame is admitted twice; `Withdrawn` is absorbing; corruption reads as `Withdrawn` | Kani; tests |
+| Publication gate | No observation is committed after a withdrawal is stored | loom; real-thread test |
 
-Compromise of any one of these defeats the consent guarantee. The Cognitive
-Hypervisor (TrustZone-M Secure World) is the layer responsible for protecting
-the first two against software-level compromise; the secure element (ATECC608B)
-is the hardware layer for the third.
+The boundaries between the layers are where 0.8.0 failed: a public-key tag let
+bytes cross from the wire layer to the state machine unauthenticated, and a
+check-then-publish interlock let an observation cross a withdrawal. In 0.9.0
+each boundary is a type or an atomic: only an `Authenticated` record reaches
+the state machine, and only a successful compare-and-swap on the gate word
+publishes.
 
-## 3. What the subsystem does **not** defend against
+## Assumptions
 
-### 3.1 An attacker with kernel-image replacement
+- `ed25519-dalek` implements RFC 8032 verification correctly, including the
+  strict checks. It is tested here against RFC 8032 keys and the conformance
+  vectors, not proven.
+- The trusted-path signing keys are held as SPEC §5.2 requires, and the kernel
+  image is the one secure boot measured.
+- The kernel's monotonic clock does not run backwards. If it ever reads earlier
+  than an arming instant, a pending co-authorisation is treated as stale.
+- Persistent storage is authenticated as SPEC §8.3 requires.
 
-If the attacker can flash a modified kernel image, the consent state machine
-is whatever the modified kernel says it is. Defence is Secure Boot: the
-boot ROM verifies the kernel image signature before jumping to it.
+## Not addressed here
 
-### 3.2 An attacker with physical replacement of the trusted path
+Side channels on the signing device; key provisioning and rotation; the misuse
+of observations an application was entitled to receive. Each has its owner in
+the Standard.
 
-If the attacker swaps the hardware button for a remote-controlled relay, the
-consent system sees a button press that did not come from the user. Defence
-is device-level tamper detection: a tamper-evident enclosure with a switch
-that triggers a panic on opening.
-
-### 3.3 Side-channel inference of cognitive state
-
-A malicious application with a legitimate `Navigation` capability could
-infer cognitive state from response-time patterns to displayed stimuli.
-This is an application-layer attack on the user, not a consent-system
-failure; defending against it requires application-layer review and is out
-of scope for the consent subsystem.
-
-### 3.4 A legitimate but malicious application
-
-If a user installs an application that declares legitimate capabilities and
-then exfiltrates the data it is admitted to receive, the consent system has
-done its job — the application received only what its manifest declared,
-and the user installed it. What the application does with received
-observations is the application's responsibility.
-
-## 4. The honest-but-buggy application
-
-The consent system explicitly defends against this case. A bug in the
-application's UI code (or a failure of the application to handle a
-`ConsentSuspended` error gracefully) cannot cause data to flow when consent
-is suspended, because the gate is at the kernel publication path, not the
-application code.
-
-This is the central reason for placing consent in the kernel.
-
-## 5. The Foundation-level safety case
-
-For a clinical deployment, the consent subsystem's role in the safety case is:
-
-> *Claim:* the user can withdraw consent at any time, and within ≤ 10 ms
-> wall-clock time no further observation reaches the application.
-> *Evidence:* SPEC §6 wire format, SPEC §3.1 transition graph, L1 Kani
-> proofs of timing bounds, L2 soak-test traces on reference hardware.
-> *Counter-evidence:* a Kani counterexample (none exists at v0.3.0); a
-> measurement on reference hardware exceeding 10 ms (none exists at v0.3.0).
-
-The Cognitive Hypervisor's interlock (SPEC §9.1.3) extends this guarantee
-to stimulation deployments.
+<sub>© 2026 Denis Yermakou · The AxonOS Project · security@axonos.org</sub>

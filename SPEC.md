@@ -1,34 +1,28 @@
 # AxonOS Consent Specification
 
-**Version 0.5.0** · 2026-05-28 · Normative
+**Version 0.6.0** · 2026-10-02 · Normative
 
 **Author:** Denis Yermakou
-**Project:** AxonOS
-**License:** [CC-BY-SA-4.0](./LICENSE-CC-BY-SA) (specification text) · [Apache-2.0 OR MIT](./LICENSE) (reference code)
+**Project:** The AxonOS Project
+**Licence:** [CC-BY-SA-4.0](./LICENSE-CC-BY-SA) (specification text) · [Apache-2.0 OR MIT](./LICENSING.md) (reference code) · [CC0-1.0](./vectors/LICENSE) (conformance vectors)
 
 ---
 
 ## Preface
 
-This document is the canonical specification of the **AxonOS Consent** subsystem — the kernel-level state machine that mediates user permission for *IntentObservation* flow in any conformant AxonOS deployment. It is a self-contained subsystem of the AxonOS Project, authored solely by Denis Yermakou, with no external collaboration claims.
+This document specifies the **AxonOS Consent** subsystem: the kernel-level state machine that decides whether a manifest's intent observations may flow, and the protocol by which the trusted path changes that decision. It elaborates Sections 15 (consent state semantics), 16 (the trusted path) and 20 (the error taxonomy) of the [AxonOS Standard](https://github.com/AxonOS-org/axonos-standard), and weakens none of them.
 
-The specification is downstream of [the AxonOS Standard](https://github.com/AxonOS-org/axonos-standard) §6. Where this document elaborates the consent state machine, it does so without weakening the bounds set by the Standard; in the event of disagreement between this document and the Standard, the Standard wins.
+The reference implementation is the `axonos-consent` crate. Version 0.9.0 of the crate implements version 0.6.0 of this specification.
 
-This specification supersedes all prior drafts of consent semantics circulated in earlier internal documents, article series, or pre-public manuscripts. References in those documents to external coupling protocols, mesh extensions, or third-party collaborations are **not** part of this specification and are not normative for any conformant AxonOS Consent implementation.
-
-The reference implementation is the `axonos-consent` crate at the version tagged in [`Cargo.toml`](./Cargo.toml).
-
-Version 0.4.0 is editorially identical to v0.3.0 in protocol terms. The three-state machine, the five admissible transitions, the wire format, the timing bounds, and the cryptographic requirements are byte-for-byte unchanged. v0.4.0 differs from v0.3.0 only by the addition of the informative §10.3, which records the fuzz and differential-testing evidence for the reference implementation. An implementation conformant with v0.3.0 is conformant with v0.4.0 without modification.
-
-Version 0.5.0 is a strict superset of v0.4.0. The single-party three-state machine, the five admissible transitions, the wire format, the timing bounds, and the cryptographic requirements are byte-for-byte unchanged. v0.5.0 adds the new, **optional** §12, which specifies multi-party (guardian) co-authorisation for clinical deployments, and promotes wire flag bit 3 (`FLAG_GUARDIAN`) from reserved to defined. An implementation conformant with v0.4.0 remains conformant with v0.5.0 without modification; multi-party support is an optional conformance profile.
+**What changed in 0.6.0.** Version 0.5.0 authenticated a consent event with a 4-byte tag computed from the record and the trusted-path *public* key. A public key is not a secret, so the tag authenticated nothing, and the full signature the text required was never carried on the wire. Version 0.6.0 replaces the wire format with version 2, which carries a 64-byte Ed25519 signature; makes replay protection normative, as Standard §16 already demanded; requires that the consent check and the publication of an observation be one atomic step; binds the dual-control role into the signed record; and moves the co-authorisation window onto the kernel's clock. The full list is in [Appendix A](#appendix-a-changes-from-050). The defect is recorded as advisory [AXC-2026-001](./docs/advisories/AXC-2026-001.md).
 
 ---
 
 ## Document conventions
 
-The key words **MUST**, **MUST NOT**, **REQUIRED**, **SHALL**, **SHALL NOT**, **SHOULD**, **SHOULD NOT**, **RECOMMENDED**, **MAY**, and **OPTIONAL** in this document are to be interpreted as described in RFC 2119 and RFC 8174.
+The key words **MUST**, **MUST NOT**, **REQUIRED**, **SHALL**, **SHALL NOT**, **SHOULD**, **SHOULD NOT**, **RECOMMENDED**, **MAY** and **OPTIONAL** are to be interpreted as described in BCP 14 ([RFC 2119](https://www.rfc-editor.org/rfc/rfc2119), [RFC 8174](https://www.rfc-editor.org/rfc/rfc8174)) when, and only when, they appear in all capitals.
 
-Byte-level wire definitions are normative; the accompanying Rust types are informative.
+Byte-level definitions are normative. Rust names are informative and refer to the reference implementation. Evidence levels (L1, L2, L3) are those of Standard Section 22.
 
 ---
 
@@ -37,16 +31,18 @@ Byte-level wire definitions are normative; the accompanying Rust types are infor
 1. [Scope](#1-scope)
 2. [The consent state machine](#2-the-consent-state-machine)
 3. [Admissible transitions](#3-admissible-transitions)
-4. [Timing bounds](#4-timing-bounds)
+4. [Timing](#4-timing)
 5. [Trusted path](#5-trusted-path)
 6. [Wire format](#6-wire-format)
-7. [Cryptographic verification](#7-cryptographic-verification)
+7. [Authentication](#7-authentication)
 8. [Storage and persistence](#8-storage-and-persistence)
 9. [Kernel interlock](#9-kernel-interlock)
 10. [Conformance](#10-conformance)
 11. [Threat model](#11-threat-model)
 12. [Multi-party (guardian) co-authorisation](#12-multi-party-guardian-co-authorisation)
-13. [References](#13-references)
+13. [Evidence](#13-evidence)
+14. [References](#14-references)
+- [Appendix A. Changes from 0.5.0](#appendix-a-changes-from-050)
 
 ---
 
@@ -54,26 +50,11 @@ Byte-level wire definitions are normative; the accompanying Rust types are infor
 
 ### 1.1 In scope
 
-This specification defines:
-
-- The three states of the consent finite-state machine (`Granted`, `Suspended`, `Withdrawn`).
-- The admissible transitions between those states.
-- The timing bounds each transition **MUST** satisfy.
-- The wire format of consent events at the kernel/SDK boundary.
-- The cryptographic verification each consent event **MUST** undergo before admission.
-- The interlock by which a withdrawn consent terminates all open *IntentObservation* streams.
-- The storage and persistence requirements across device power cycles.
-- The conformance criteria for an implementation of this specification.
+This specification defines the three consent states and the transitions between them; the trusted path through which transitions are requested; the wire format of a consent frame; how a frame is authenticated and protected against replay; what must persist across power cycles; how the consent decision gates the publication of observations; and, optionally, how a second party co-authorises decisions.
 
 ### 1.2 Out of scope
 
-This specification does **not** define:
-
-- The user-interface affordance through which the user signals a consent state change. That is the responsibility of the device manufacturer's UI layer; this specification only defines what arrives at the trusted-path input.
-- The hardware design of the trusted path itself.
-- The application layer's behaviour after receipt of a consent-related error code from the SDK. Applications **SHOULD** display a clear notification and stop attempting further observation requests; the specifics are application-domain decisions.
-- Multi-party consent in its *single-party* baseline: the baseline machine of §2 is single-signature. Optional multi-party (guardian) co-authorisation is specified normatively in [§12](#12-multi-party-guardian-co-authorisation).
-- Any inter-device coupling protocol. This specification is for a single-device AxonOS deployment; multi-device deployments use the [Standard's swarm coordination subsystem](https://github.com/AxonOS-org/axonos-standard/blob/main/architecture/swarm-coordination.md) layered above this one.
+The acquisition, processing or transport of neural signal; the capability system and the manifest format (Standard Sections 12 and 14); the user interface of the trusted path; the provisioning and rotation of keys; secure boot. Each is a dependency of this specification, not a subject of it.
 
 ---
 
@@ -81,33 +62,21 @@ This specification does **not** define:
 
 ### 2.1 The three states
 
-A conformant implementation **MUST** model consent as a finite-state machine with exactly three states:
+| State | Discriminant | Meaning |
+|:--|:--:|:--|
+| `Granted` | `0x01` | Intent observations flow. |
+| `Suspended` | `0x02` | Observations do not flow; a consumer receives the consent-suspended error, `0x05`. Resumable through the trusted path. |
+| `Withdrawn` | `0x03` | Observations never flow again for this installation; a consumer receives the consent-withdrawn error, `0x06`. Terminal. |
 
-| State | Discriminant | Effect on observation streams |
-|:---|:---:|:---|
-| `Granted` | `0x01` | Observations flow normally. |
-| `Suspended` | `0x02` | Observations do not flow; consumers receive a typed backpressure error. |
-| `Withdrawn` | `0x03` | All streams terminated; manifest invalidated. |
-
-Discriminant `0x00` is **reserved** and **MUST NOT** be emitted by any conformant implementation. Discriminants `0x04` through `0xFF` are **reserved**.
-
-A consent state is associated with a specific *manifest installation*. The state is per-manifest, not per-device — different applications installed on the same device may be in different consent states simultaneously.
+Discriminants `0x00` and `0x04`–`0xFF` are reserved. A receiver **MUST** refuse a frame that carries one (§7.6).
 
 ### 2.2 Initial state
 
-A freshly installed manifest **MUST** begin in state `Granted`. There is no separate "pending" state; the act of installing a signed manifest through the trusted path constitutes initial consent.
+A freshly installed manifest **MUST** start in `Granted`, with no sequence number consumed from any signer.
 
-A device factory reset **MUST** clear all manifest installations; there is no state to migrate.
+### 2.3 Representation and failing closed
 
-### 2.3 State representation
-
-Within the kernel, the per-manifest consent state **MUST** be stored as a single byte in a memory region with the following properties:
-
-- Written only by the consent state machine's transition functions.
-- Read by the kernel IPC publication path and by the optional Cognitive Hypervisor interlock.
-- Not writable from any application-layer context.
-
-The reference implementation places this byte in a `core::sync::atomic::AtomicU8` accessed with `Ordering::SeqCst` on writes and `Ordering::Acquire` on reads. Alternative implementations **MAY** use platform-specific synchronisation, provided the visibility guarantees of the seqlock pattern in [STANDARD §4.4](https://github.com/AxonOS-org/axonos-standard/blob/main/STANDARD.md#section-4) are preserved.
+An implementation **MUST** read a stored state that is not `0x01` or `0x02` — whether `0x03`, a reserved value, or the product of corruption — as `Withdrawn`. Corruption may stop observations; it **MUST NOT** start them.
 
 ---
 
@@ -115,117 +84,43 @@ The reference implementation places this byte in a `core::sync::atomic::AtomicU8
 
 ### 3.1 The transition graph
 
-Exactly the following transitions are admissible:
+Exactly seven ordered pairs are admissible: the three identities, and four transitions that change the state.
 
-```
-       ┌───────────┐
-       │  Granted  │◄────────────┐
-       └─────┬─────┘             │
-             │                   │
-   user pause│  user resume      │
-             ▼                   │
-       ┌───────────┐             │
-       │ Suspended │─────────────┘
-       └─────┬─────┘
-             │
-   user revoke (also from Granted)
-             ▼
-       ┌───────────┐
-       │ Withdrawn │  (terminal — requires new manifest install)
-       └───────────┘
-```
-
-The five admissible transitions are:
-
-| From | To | Trigger |
-|:---|:---|:---|
-| `Granted` | `Suspended` | User pause from trusted path |
-| `Suspended` | `Granted` | User resume from trusted path |
-| `Granted` | `Withdrawn` | User revoke from trusted path |
-| `Suspended` | `Withdrawn` | User revoke from trusted path |
-| any | identity | Idempotent re-application of current state |
+| From \ To | `Granted` | `Suspended` | `Withdrawn` |
+|:--|:--:|:--:|:--:|
+| `Granted` | identity | pause | withdraw |
+| `Suspended` | resume | identity | withdraw |
+| `Withdrawn` | — | — | identity |
 
 ### 3.2 Inadmissible transitions
 
-The following transitions are **NOT** admissible. An implementation receiving a request for any of these **MUST** ignore the request and emit a typed error:
-
-- `Withdrawn → Granted`
-- `Withdrawn → Suspended`
-- Any transition initiated from a source other than the trusted path (§5).
+`Withdrawn → Granted` and `Withdrawn → Suspended` are inadmissible. A frame that requests one **MUST** be refused (§7.6) and **MUST NOT** change the state.
 
 ### 3.3 Non-reversibility of `Withdrawn`
 
-The `Withdrawn` state is **terminal**. The only path to receiving observations again is for the user to install a fresh manifest through the trusted path; a fresh manifest begins in `Granted` (§2.2) but is a new installation, not a resumption.
-
-This non-reversibility is the central anti-coercion property of the consent system: if `Withdrawn → Granted` were admissible, an application or a privileged operator could pressure the kernel to silently move from `Withdrawn` back to `Granted`, defeating the user's revocation. The Standard treats this property as inviolable; it cannot be relaxed within the v1.x major version line.
+`Withdrawn` is absorbing. Observations resume only through the installation of a new manifest, which is a new installation with a new manifest identifier and a fresh state machine. This is the anti-coercion property: a person who has withdrawn cannot be made to re-grant through the same installation.
 
 ### 3.4 Idempotency
 
-Re-applying the current state through the trusted path **MUST** succeed without modifying state, **MUST NOT** emit an error, and **MUST** complete within the same timing bound as a non-trivial transition (§4). This permits the trusted path to recover from message loss without producing spurious state changes.
+An identity transition is admitted and changes nothing but the consumed sequence number (§7.5). It lets the trusted path re-assert a state without first reading it.
 
 ---
 
-## 4. Timing bounds
+## 4. Timing
 
-### 4.1 The cycle bound
+### 4.1 The transition
 
-The state-machine transition function (the function in the reference implementation called `handle_event()`) **MUST** complete in **≤ 1648 CPU cycles** on the reference hardware (ARM Cortex-M4F at 168 MHz, equivalent to **≤ 9.8 µs**). The bound applies to any admissible input, including non-trivial transitions and idempotent re-applications.
+The state-machine step that follows authentication — the manifest check, the sequence check, the admissibility check and the store — **MUST** execute in constant time with respect to its inputs: it **MUST NOT** loop, allocate or block. The reference implementation's step is straight-line code over fixed-width integers.
 
-**Evidence, stated precisely.** Two distinct claims live in this section and
-they carry different evidence:
+No cycle bound is specified for the step at this revision. Releases up to 0.8.0 of the reference implementation published one, derived for a path that verified the 4-byte tag of §A; that path no longer exists, and the figure is withdrawn. A bound will be specified only together with its derivation and an on-device measurement at evidence level L2.
 
-1. **The cycle figure (≤ 1648)** is an *analytical* bound, derived by
-   instruction counting against the ISA timing reference. The derivation
-   artefact is pending publication. It is **not** a Kani output. Kani is a
-   bounded model checker over Rust MIR and does not compute Cortex-M cycle
-   counts; a harness cannot produce a wall-clock or cycle bound.
-2. **Termination and target-state correctness** is **L1** per the
-   [AxonOS Standard validation taxonomy](https://github.com/AxonOS-org/axonos-standard/blob/main/VALIDATION.md),
-   backed by the Kani harness `handle_withdraw_terminates`. That harness
-   proves `handle_event()` terminates under bounded unwinding and yields
-   `Withdrawn` on a terminal Withdraw frame.
+### 4.2 Authentication
 
-At this revision the harness exercises the transition from `Granted` only;
-extending it to the `Suspended` and `Withdrawn` starting states is a known
-open item. Until the cycle-bound derivation is published and the harness
-covers all three states, §4.1 must not be cited as a proven timing bound.
+Ed25519 verification (§7) dominates the cost of admitting a frame. Its duration depends on the verifier — software, or a secure element — and **MUST** be accounted for in the deployment's withdrawal budget (§4.3).
 
-### 4.2 The wall-clock bound
+### 4.3 The withdrawal budget
 
-A `* → Withdrawn` transition **MUST** terminate all open observation streams for the affected manifest within **≤ 10 ms wall-clock time** from receipt of the trusted-path withdrawal event.
-
-This bound is composed of three sub-bounds:
-
-| Component | Sub-bound | Evidence |
-|:---|:---:|:---:|
-| State-machine transition itself (§4.1) | ≤ 9.8 µs | analytical |
-| Kernel IPC ring-buffer producer-side termination | ≤ 1 scheduler tick ≈ 4 ms | L1 |
-| SDK observation iterator returning `StreamTerminated` | ≤ 1 SDK poll period ≈ 4 ms | L2 |
-| **Sum** | ≤ 10 ms | composed |
-
-### 4.3 Measured performance (reference hardware)
-
-The reference implementation at v0.3.0 measures, on the reference hardware over an 18-hour soak with 12 × 10⁶ withdrawal events:
-
-| Statistic | Value |
-|:---|---:|
-| Median withdrawal cycles | 1098 (≈ 6.5 µs) |
-| 99.9th percentile cycles | 1487 (≈ 8.85 µs) |
-| Worst observed cycles | 1503 (≈ 8.95 µs) |
-| Analytical upper bound (§4.1) | 1648 (9.81 µs) |
-
-All measurements fall within the analytical bound of §4.1. Kani produced no counterexample at the published correctness harness.
-
-### 4.4 Bounds on adverse machine state
-
-The analytical bound of §4.1 is intended to hold under the following adverse conditions:
-
-- Cache cold-start (instruction and data caches both invalidated).
-- Branch-predictor misses on the transition's control flow.
-- DMA contention on the SRAM bus from the simultaneous IPC producer.
-- Maximum admissible interrupt rate (set by [STANDARD §4.2](https://github.com/AxonOS-org/axonos-standard/blob/main/STANDARD.md#section-4)).
-
-The Kani harness models all four. Implementations **SHOULD** test all four with measured benchmarks before claiming v0.3.0 conformance.
+A `* → Withdrawn` transition **MUST** stop all observation flow for the manifest within **10 ms** of the trusted path emitting the withdrawal frame. The budget covers delivery of the frame to the kernel, authentication, the transition, and the stop of publication. Under §9 the stop of publication is immediate: once the withdrawal is stored, no observation can be committed. This budget is a requirement on deployments; the reference implementation does not claim to meet it on any specific hardware.
 
 ---
 
@@ -233,210 +128,195 @@ The Kani harness models all four. Implementations **SHOULD** test all four with 
 
 ### 5.1 Definition
 
-The **trusted path** is the input channel through which consent state transitions are signalled. A consent event arriving from any other source **MUST** be refused.
+The **trusted path** is the channel through which consent transitions are requested, ending at a signing key that the application layer cannot use. A consent frame whose signature does not verify under a trusted-path key **MUST** be refused.
 
-### 5.2 Acceptable trusted-path implementations
+### 5.2 Acceptable trusted paths
 
-A conformant implementation **MUST** use one of the following as its trusted path:
+A conformant implementation **MUST** use one of:
 
-- A **physical hardware button** wired directly to the kernel's input interrupt line, with debounce circuitry that emits at most one event per actuation regardless of bounce or noise.
-- A **Secure-World UI partition** on an ARM TrustZone-M device (Cortex-M33), with the trusted-path event delivered to the Normal World only by a Secure Monitor Call from the Secure-World UI.
-- An equivalent input channel that the application layer **provably cannot synthesise**.
+- a **physical control** wired to a component that holds the signing key and that the application core cannot drive;
+- a **Secure-World UI** on an ARM TrustZone-M device, holding the signing key in the Secure World;
+- an equivalent channel whose signing key the application layer **provably cannot** use.
 
-### 5.3 Application-layer events are refused
+### 5.3 Application-layer requests are refused
 
-A consent event whose origin is identified as an application-layer source (any source outside the trusted-path enumeration in §5.2) **MUST** be refused with a typed error. The implementation **MUST NOT** "convert" application-layer requests into trusted-path events under any circumstances.
-
-This refusal includes:
-
-- Network messages claiming to carry a consent transition.
-- IPC messages from the application core.
-- File-system writes to a configuration file.
-- Environment-variable changes.
+The kernel **MUST NOT** convert an application-layer request — a network message, an IPC message from the application core, a file, an environment variable — into a consent frame. An application can ask the user to act on the trusted path; it cannot act for them.
 
 ### 5.4 Audit
 
-Every trusted-path event accepted by the consent state machine **SHOULD** be recorded in a tamper-evident audit log accessible only to the device operator (not the application). The audit log entry **MUST** include: the timestamp (from the kernel monotonic clock per [STANDARD §4.5](https://github.com/AxonOS-org/axonos-standard/blob/main/STANDARD.md#section-4)), the manifest ID affected, the from-state and to-state, and a cryptographic hash of the input event.
+Every admitted frame **SHOULD** be recorded in a tamper-evident log readable by the device operator and not by the application. An entry **MUST** include the kernel's monotonic time of admission (Standard Section 11), the manifest identifier, the from- and to-states, the signer, the sequence number, and a cryptographic hash of the frame.
 
 ---
 
 ## 6. Wire format
 
-### 6.1 The consent event record
+### 6.1 The frame
 
-A consent event crosses the trusted-path / kernel boundary as a **16-byte little-endian record**:
+A consent frame is exactly **96 bytes**: a 32-byte **record**, followed by the 64-byte Ed25519 **signature** over those 32 bytes.
 
-```
-┌─ Offset ─┬─ Size ─┬─ Field ────────────┬─ Type ─────────────────┐
-│   0      │   1    │ state              │ u8 (discriminant §2.1) │
-│   1      │   1    │ flags              │ u8 (bitfield §6.2)     │
-│   2      │   2    │ manifest_id        │ u16 (per-device)       │
-│   4      │   8    │ timestamp_us       │ u64 (kernel monotonic) │
-│  12      │   4    │ sig_truncated      │ u32 (Ed25519 tag §7.2) │
-└──────────┴────────┴────────────────────┴────────────────────────┘
-```
+| Offset | Size | Field | Encoding | Rule |
+|--:|--:|:--|:--|:--|
+| 0 | 4 | `magic` | ASCII `AXC2` | Protocol `AXC`, wire version `2`. Any other value **MUST** be refused. |
+| 4 | 1 | `state` | `u8` | A discriminant of §2.1. |
+| 5 | 1 | `flags` | `u8` | §6.2. |
+| 6 | 2 | `manifest_id` | `u16` LE | The installation the frame is for. |
+| 8 | 8 | `sequence` | `u64` LE | §7.5. |
+| 16 | 8 | `timestamp_us` | `u64` LE | The signer's clock at signing, in µs. Informational (§6.3). |
+| 24 | 8 | `reserved` | zero | Any non-zero byte **MUST** be refused. |
+| 32 | 64 | `signature` | RFC 8032 | Ed25519 over bytes 0–31 (§7). |
 
-The encoding is canonical-CBOR-compatible at the data-model level (CBOR major type 4 array of five integer-typed members). Implementations **MAY** carry the record as raw 16 bytes when no CBOR encoder is available in the trusted-path partition.
+A receiver **MUST** refuse any input that is not exactly 96 bytes.
 
-### 6.2 Flags byte
+### 6.2 Flags
 
-| Bit | Meaning |
-|:---:|:---|
-| 0 | `terminal` — set to 1 if the encoded state is `Withdrawn` |
-| 1 | `from-secure-world` — set to 1 if the event originated from a TrustZone-M Secure-World UI |
-| 2 | `replay-tolerant` — set to 1 if the event is acceptable as an idempotent re-application |
-| 3 | reserved (MUST be 0) |
-| 4 | reserved (MUST be 0) |
-| 5 | reserved (MUST be 0) |
-| 6 | reserved (MUST be 0) |
-| 7 | reserved (MUST be 0) |
+| Bit | Name | Rule |
+|:--:|:--|:--|
+| 0 | `terminal` | **MUST** be set if, and only if, `state` is `Withdrawn`. A record in which they disagree **MUST** be refused. |
+| 1 | `from-secure-world` | Set when the frame originated in a Secure-World UI. Signed and audited; it does not change admission. |
+| 2 | — | Reserved. In wire version 1 this bit meant *replay-tolerant*; it is retired, because every frame is now subject to §7.5. |
+| 3 | `guardian` | Set when the signer is the guardian (§12). Clear for the patient. |
+| 4–7 | — | Reserved. |
 
-A receiver that observes any reserved bit set **MUST** refuse the event with a typed error.
+A record with any reserved bit set **MUST** be refused.
 
-### 6.3 Wire-format size constraints
+### 6.3 The signer's timestamp
 
-A receiver **MUST** refuse any wire-format input that is not exactly 16 bytes. The CBOR-decoder used by the reference implementation enforces a maximum depth of 8 and a maximum length of 256 bytes; both are compile-time constants verified by Kani harness `cbor_decoder_bounded`.
+`timestamp_us` records the signer's clock for the audit log. A receiver **MUST NOT** use it to decide admission, ordering, freshness or any co-authorisation window; it is authenticated, but it is still the sender's claim. Ordering is the job of `sequence` (§7.5), and time is the job of the kernel's clock (§12.4).
 
 ### 6.4 Byte order
 
-All multi-byte fields are little-endian. Implementations **MUST** convert to host byte order before interpreting fields.
+Every multi-byte integer is little-endian.
+
+### 6.5 Canonical encoding
+
+Every 32-byte record that a receiver accepts **MUST** re-encode to exactly the same 32 bytes. There is no second encoding of any record, so a signature commits to exactly one decision.
 
 ---
 
-## 7. Cryptographic verification
+## 7. Authentication
 
 ### 7.1 Authentication is mandatory
 
-Every wire-format consent event **MUST** be verified against the trusted-path public key before the state transition is admitted. An event whose signature does not verify **MUST** be refused with a typed error and **MUST NOT** cause any state change.
+Every frame **MUST** be authenticated before any field of its record influences anything other than the frame's own refusal. A frame that fails authentication **MUST** be refused with code `0x08` and **MUST NOT** change the state, the consumed sequence numbers, or anything else.
 
-### 7.2 Two-stage signature check
+### 7.2 The algorithm
 
-The 4-byte `sig_truncated` field is a fast integrity check. The full 64-byte Ed25519 signature is verified out-of-band against the trusted-path public key (the key is stored in the device's secure element — see §8.3).
+The signature is **Ed25519** as defined in [RFC 8032](https://www.rfc-editor.org/rfc/rfc8032) §5.1, PureEdDSA, over the 32 bytes of the record. The magic `AXC2` at the start of every signed message separates this protocol, and this version of it, from any other use of the same key.
 
-| Stage | Purpose | Cycles |
-|:---|:---|:---:|
-| `sig_truncated` check | Constant-time integrity (rejects ~ 99.99999% of accidental corruption) | ≤ 40 |
-| Full Ed25519 verification | Cryptographic authentication | ≈ 350,000 (ATECC608B-assisted: ≤ 12 ms wall-clock) |
+### 7.3 Strict verification
 
-The 4-byte truncated tag has collision resistance of ~ 2^32 against **accidental** corruption only. It is **NOT** an authentication; it is purely an integrity check used to short-circuit unnecessary full-signature verifications.
+A verifier **MUST** refuse:
 
-### 7.3 Constant-time verification
+- a signature whose scalar `S` is not reduced — that is, `S ≥ L`, where `L` is the order of the prime-order subgroup (RFC 8032 §5.1.7);
+- a signature whose point `R` is not canonically encoded or has small order;
+- a signature that does not satisfy the verification equation.
 
-The full Ed25519 verification path **MUST** be constant-time with respect to the signature value.
+Verification handles only public data, so this specification places no constant-time requirement on it. The signer is a different matter (§11.2).
 
-**Evidence, stated precisely.** This requirement is **not** currently backed by a
-proof and must not be cited as L1. Constant-time execution is a timing and
-side-channel property; Kani is a bounded model checker over Rust MIR and cannot
-establish it. The harness `signature_verification_constant_time` proves a
-narrower, purely functional claim: that the branchless comparison
-`ct_eq_u32(a, b)` returns the same result as `a == b` for all inputs. It covers
-the 4-byte truncated tag, not the Ed25519 path, and it says nothing about
-execution time. Establishing the requirement above needs a timing-aware method
-— binary-level analysis, dudect-style statistical testing, or a
-secret-independence type system. Until one is applied, §7.3 is an unverified
-requirement on implementers.
+### 7.4 Trust anchors
 
-The reference implementation defers actual point-arithmetic to the [ATECC608B secure element](https://www.microchip.com/en-us/product/ATECC608B), which provides hardware-side-channel-resistant Ed25519. Implementations that perform Ed25519 in software **MUST** use a constant-time implementation (e.g., `ed25519-dalek` with the `zeroize` feature enabled).
+A receiver **MUST** refuse, when it is configured, a trusted-path public key that does not decode to a curve point, or that decodes to a point of small order. Under §12 it **MUST** also refuse a configuration in which the patient and guardian keys are equal.
 
-### 7.4 Public key management
+### 7.5 Replay protection
 
-The trusted-path public key is provisioned at device manufacture and stored in the secure element. Key rotation requires a signed software-update procedure that is outside the scope of this specification; see the device manufacturer's secure-update documentation.
+Each signer keeps a `sequence` that **MUST** increase strictly with every frame it signs for a manifest, and **MUST** persist across the signer's own power cycles.
+
+A receiver keeps, per manifest and per signer, the last sequence number it consumed, initially zero. After a frame authenticates and names this manifest, the receiver **MUST** refuse it with code `0x08` unless its `sequence` is strictly greater than the last one consumed from its signer. A frame that passes this check **MUST** consume its sequence number — the receiver records it as the last one consumed — **whether or not** the transition it requests is then admitted. An authentic frame refused for its transition can therefore never be held back and replayed into a later state.
+
+### 7.6 Order of checks
+
+A receiver **MUST** apply the checks in this order, and refuse a frame for the first rule it breaks:
+
+| # | Check | Refusal | Code |
+|--:|:--|:--|:--:|
+| 1 | Length is exactly 96 bytes | `WireFormatLength` | `0x07` |
+| 2 | Magic is `AXC2` | `BadMagic` | `0x07` |
+| 3 | `state` is a discriminant of §2.1 | `ReservedDiscriminant` | `0x07` |
+| 4 | No reserved flag bit is set | `ReservedFlagBit` | `0x07` |
+| 5 | `terminal` agrees with `state` | `TerminalFlagMismatch` | `0x07` |
+| 6 | The reserved bytes are zero | `ReservedFieldNonZero` | `0x07` |
+| 7 | The signature verifies under the key of the party the record names | `SignatureInvalid` | `0x08` |
+| 8 | `manifest_id` names this installation | `ManifestMismatch` | `0xFF` |
+| 9 | `sequence` exceeds the last consumed from this signer | `Replay` | `0x08` |
+| 10 | The transition is admissible from the current state | `InadmissibleTransition` | `0xFF` |
+
+Checks 1–6 read only the shape of the frame. Nothing after check 7 trusts a field that the signature has not covered. A record that names the guardian is refused at check 7 by a receiver that has no guardian key.
 
 ---
 
 ## 8. Storage and persistence
 
-### 8.1 Persistence across power cycles
+### 8.1 What persists
 
-Consent state **MUST** persist across device power cycles. A `Granted` state at shutdown **MUST** be restored as `Granted` at next boot; a `Suspended` state restores as `Suspended`; a `Withdrawn` state restores as `Withdrawn`.
+An implementation **MUST** persist, per manifest: the consent state, and the last sequence number consumed from each signer. A state restored at boot **MUST** be the state stored at the last admitted frame. Losing the sequence numbers would re-open every old frame to replay, so they persist with the same discipline as the state.
 
-### 8.2 Storage location
+### 8.2 When it persists
 
-Consent state **MUST** be stored in **non-volatile memory** under one of the following:
+The state and the sequence numbers **MUST** be written as one atomic unit, after a frame is admitted and before the admission is acknowledged to the trusted path.
 
-- The internal Flash of the signal-processing core (e.g., STM32F407 internal Flash).
-- The secure element's data zone (e.g., ATECC608B data slots).
-- A combination of the two, with the secure element holding the authentication tag of the Flash-stored state.
+### 8.3 Where it persists
 
-Storage in external SPI/I²C Flash chips **MUST NOT** be used without an attached authentication tag verified by the secure element on read.
+Consent data **MUST** be stored in non-volatile memory that the application core cannot write: internal Flash of the signal-processing core, the data zone of a secure element, or a combination in which the secure element holds an authentication tag over Flash-stored data. External Flash **MUST NOT** be used without such a tag, verified on every read.
 
-### 8.3 Tamper detection
+### 8.4 Tamper detection
 
-If on boot the consent state's authentication tag fails to verify, the implementation **MUST** default to `Withdrawn` for the affected manifest, emit an audit event, and refuse to deliver observations until the user installs a fresh manifest through the trusted path.
+If the authentication tag over stored consent data fails to verify at boot, the implementation **MUST** treat the manifest as `Withdrawn`, record the event in the audit log, and deliver no observations for it until a new manifest is installed through the trusted path.
 
-A failed authentication is treated as a hostile-modification event, not a recoverable error.
+### 8.5 Pending co-authorisations
 
-### 8.4 Storage of manifest data
-
-The application manifest itself (capability set, rate ceiling, Ed25519 application key) is stored alongside the consent state under the same authentication discipline. A manifest whose authentication tag fails to verify on boot **MUST** be deleted, not merely refused.
+A pending co-authorisation (§12.4) **MUST NOT** persist. After a power cycle both parties authorise again, which errs in the safe direction.
 
 ---
 
 ## 9. Kernel interlock
 
-### 9.1 The interlock contract
+### 9.1 The contract
 
-The consent state machine interlocks with three other kernel subsystems:
+The consent state gates every publication of an intent observation for its manifest. A publication refused because consent is `Suspended` or `Withdrawn` produces the consent-suspended (`0x05`) or consent-withdrawn (`0x06`) error, delivered through the SDK's normal error path.
 
-1. **IPC publication path.** The producer side of every SPSC ring buffer (one per application observation stream) reads the consent state before publishing each *IntentObservation*. A `Suspended` or `Withdrawn` state suppresses publication.
+### 9.2 Linearization
 
-2. **SDK error path.** Suppressed publications produce typed `ConsentSuspended` (`0x05`) or `ConsentWithdrawn` (`0x06`) errors per [STANDARD §7.4](https://github.com/AxonOS-org/axonos-standard/blob/main/STANDARD.md#section-7), delivered to the application through the SDK's normal error mechanism.
+Reading the consent state and then publishing is a race: a withdrawal can land between the read and the write. An implementation **MUST** therefore make the consent check and the commit of a publication **one atomic step**, ordered with respect to every state change. The required property:
 
-3. **Cognitive Hypervisor (optional).** On deployments running the Cognitive Hypervisor (TrustZone-M Secure World), StimGuard reads the consent state through a Secure Monitor Call before allowing any stimulation pulse. A `Withdrawn` state immediately disables stimulation regardless of pending pulse-queue content. The path from `Withdrawn` transition to StimGuard's awareness is bounded at ≤ 100 µs (L1).
+> Once a transition to `Suspended` or `Withdrawn` has been stored, no publication commits until the state is `Granted` again — and after `Withdrawn`, none ever does.
 
-### 9.2 Atomicity
+Equivalently, every committed publication is ordered before the withdrawal, and is therefore one the person had consented to.
 
-The transition to `Withdrawn` and the suppression of pending publications **MUST** appear atomic from the perspective of any observer on the application core. An observer **MUST NOT** see an `IntentObservation` followed by a `Withdrawn` error from a moment earlier in monotonic time.
+### 9.3 The reference design
 
-The reference implementation achieves this by writing the new state under `Ordering::SeqCst` before publishing the corresponding error, with a release barrier between the two.
+The reference implementation keeps the consent state and the count of committed publications in one 32-bit atomic word: the state in bits 0–1, the count, modulo 2³⁰, in bits 2–31. A producer writes an observation into the next slot of its ring and then commits it with a compare-and-swap that succeeds only while the state bits read `Granted`; the consumer reads the count with acquire ordering and reads only committed slots. A state change rewrites the state bits of the same word. Because both are operations on one atomic object, they are totally ordered, and §9.2 holds by construction. A word whose state bits are `00` reads as `Withdrawn` (§2.3). Ring capacity **MUST** be a power of two no larger than 2²⁹ under this design.
+
+### 9.4 Stimulation
+
+On deployments with a stimulation path, the stimulation guard **MUST** read the consent state through the same linearization point before every pulse, and `Withdrawn` **MUST** disable stimulation regardless of the content of any pending pulse queue.
 
 ---
 
 ## 10. Conformance
 
-### 10.1 Conformance criteria
+### 10.1 Criteria
 
-An implementation is **conformant with the AxonOS Consent v0.5.0 baseline profile** if, and only if, it satisfies all of:
+An implementation **conforms to the baseline profile of AxonOS Consent 0.6.0** if, and only if, it:
 
-1. Models consent as the three-state FSM of §2.
-2. Admits exactly the five transitions of §3.1 and refuses all others.
-3. Satisfies the cycle bound of §4.1 (≤ 1648 cycles, analytical).
-4. Satisfies the wall-clock bound of §4.2 (≤ 10 ms wall-clock from withdrawal to stream termination).
-5. Implements the trusted-path requirements of §5.
-6. Implements the wire format of §6 bit-exactly.
-7. Implements two-stage cryptographic verification per §7.
-8. Persists state across power cycles per §8 with tamper detection per §8.3.
-9. Maintains the kernel interlock contract of §9.
-10. Passes the conformance test suite shipped with the reference implementation.
+1. models consent as the three-state machine of §2, failing closed per §2.3;
+2. admits exactly the seven pairs of §3.1;
+3. meets the timing requirements of §4;
+4. implements the trusted path of §5;
+5. implements wire version 2 of §6 bit-exactly;
+6. authenticates every frame per §7, with strict verification, trust-anchor checks, replay protection, and the order of checks of §7.6;
+7. persists per §8;
+8. provides the linearization of §9.2;
+9. produces the documented outcome for every conformance vector (§10.2).
 
-An implementation additionally conforms to the **multi-party profile** if it
-also satisfies every requirement of §12. The multi-party profile is optional;
-the baseline profile is unaffected by it. A v0.4.0-conformant implementation is
-a conformant v0.5.0 baseline-profile implementation without modification.
+It conforms to the **multi-party profile** if it also satisfies §12.
 
-### 10.2 Test vectors
+### 10.2 Conformance vectors
 
-A set of canonical wire-format vectors is published in [`vectors/`](./vectors/). The vector set covers:
+The [`vectors/`](./vectors/) directory holds twenty vectors, each a frame and the outcome it must produce: the state and sequence the frame meets, and either the resulting state or the refusal and its code. Every frame is signed with a key from RFC 8032 §7.1, so the set can be checked without the reference implementation. The set covers the seven admissible pairs and both inadmissible ones, each shape refusal of §7.6, a forged signature, a signature under the wrong key, a replayed sequence, a non-canonical signature (`S + L`), a wrong manifest, and a guardian record presented to a single-party receiver.
 
-- Each of the five admissible transitions.
-- Each of the inadmissible transitions, asserted refusal.
-- Boundary cases for wire format (under-length, over-length, reserved bits set).
-- Signature-failure cases.
+### 10.3 Fuzzing (informative)
 
-A conformant implementation **MUST** produce the documented response for each vector.
-
-
-### 10.3 Fuzz and differential testing (informative)
-
-The reference implementation is exercised by a coverage-guided fuzz suite (`fuzz/`, built on libFuzzer through `cargo-fuzz`). Three targets search for inputs that would violate this specification:
-
-- **`wire_decode`** drives §6 wire-format decoding with arbitrary byte buffers and asserts that the decoder is *total* — every input yields either an accepted event or a typed refusal, and never a panic or an out-of-bounds read.
-- **`roundtrip`** asserts that the §6 encoding is *canonical* — every accepted 16-byte buffer re-encodes to itself, so no two distinct buffers denote one consent event.
-- **`fsm_sequence`** drives the §2–§3 state machine with arbitrary streams of correctly-signed events and asserts the four machine invariants: no panic, every stored state valid, `Withdrawn` terminal per §3.3, and every accepted transition admissible per §3.1.
-
-Fuzzing complements, and does not replace, the bounded-model-checking harnesses. The Kani harnesses are **L1 evidence** — an exhaustive proof over a bounded input space. The fuzz suite is **L2-class evidence** — a large, coverage-guided sample of the unbounded input space. The two are run together: the harnesses prove the bounded core, the fuzz suite searches the remainder. The fuzz suite is executed in continuous integration on every change; a discovered crash fails the build and is treated as a specification or implementation defect.
-
-This subsection is informative. It describes the evidence held for the reference implementation; it does not add a conformance obligation on independent implementations beyond those of §10.1.
+The reference implementation runs three coverage-guided fuzz targets on every change: `frame_decode` (§6: total and canonical decoding), `fsm_sequence` (§2, §3, §7.5, §9: invariants under arbitrary record streams, with authentication stubbed out so the search reaches the state machine), and `auth_forgery` (§7: no frame the fuzzer builds is admitted under a real key). Each runs for 60 seconds in continuous integration — a regression net rather than a search. Fuzzing complements the proofs of §13; it does not replace them.
 
 ---
 
@@ -444,131 +324,126 @@ This subsection is informative. It describes the evidence held for the reference
 
 ### 11.1 In scope
 
-The consent specification defends against:
+This specification defends against:
 
-- **Honest-but-buggy applications** that fail to honour a software flag.
-- **Out-of-band consent changes** (operator, clinician) that an application would not see.
-- **In-flight data races** at the moment of withdrawal.
-- **Forged application-layer events** claiming to be trusted-path transitions.
+- **forged frames** from anyone who does not hold a trusted-path signing key, including anyone who holds the public key;
+- **replayed frames**, before or after a power cycle;
+- **relabelled frames** — a guardian frame presented as the patient's, or the reverse;
+- **manipulated timestamps** — a signer's clock moved to stretch or shrink a co-authorisation window;
+- **malleated signatures** — a second encoding of a valid signature;
+- **the withdrawal race** — an observation published in the instant consent is withdrawn;
+- **corrupted state** — a stored or in-memory state byte damaged by a fault;
+- **applications** that fail to honour a software flag, or that try to request consent changes themselves.
 
 ### 11.2 Out of scope
 
-The consent specification does **NOT** defend against:
+This specification does not defend against compromise of the trust anchors of §11.3; physical replacement of the trusted-path hardware; side channels on the signing device, which belong to the trusted path; implementation defects in the Ed25519 library, which the reference implementation takes from `ed25519-dalek`; or an application that legitimately receives observations and misuses them, which is the domain of the capability system (Standard Section 12).
 
-- An attacker who can replace the kernel image (defeat: Secure Boot).
-- An attacker who can physically replace the hardware between the user and the trusted path (defeat: device tamper detection at the hardware level).
-- Side-channel inference of cognitive state from observable application behaviour unrelated to the consent system (defeat: see [STANDARD §13](https://github.com/AxonOS-org/axonos-standard/blob/main/STANDARD.md#section-13) for what is out of scope of the Standard).
-- An honest user who installs a malicious application that legitimately declares its capabilities and then exfiltrates the data it is permitted to receive (defeat: not the consent system's job — applications are end-user software, and what they do with permitted observations is the application's responsibility).
+### 11.3 Trust anchors
 
-### 11.3 The trust anchor
-
-The consent system's trust anchor is the **kernel** and the **trusted-path public key** stored in the secure element. If either is compromised, the consent system offers no guarantee. The Cognitive Hypervisor and Secure Boot subsystems address compromise of these trust anchors at the hardware level; the consent specification assumes their guarantees hold.
+The kernel image, and the trusted-path signing keys held where §5.2 requires. If either is compromised, this specification offers no guarantee; secure boot and the secure element defend them.
 
 ---
 
 ## 12. Multi-party (guardian) co-authorisation
 
-*This section is **optional**. An implementation that does not support
-multi-party deployments is conformant without it. An implementation that
-**does** support multi-party deployments **MUST** satisfy this section.*
+*Optional. An implementation that supports multi-party deployments **MUST** satisfy this section.*
 
 ### 12.1 Motivation
 
-In clinical deployments a guardian may co-authorise consent decisions together
-with the patient — for example in the ALS rehabilitation pilot in the canonical
-Standard's roadmap. Multi-party support adds a second authorising key without
-weakening the single-party guarantees of §2–§11.
+In clinical deployments a guardian may share consent decisions with the patient. A second key adds that party without weakening anything in §2–§11.
 
 ### 12.2 Parties
 
-A multi-party deployment recognises exactly two parties:
+| Party | Key | `guardian` flag |
+|:--|:--|:--:|
+| Patient | the trusted-path key | 0 |
+| Guardian | a second key | 1 |
 
-| Party | Key | Discriminant |
-|:---|:---|:---:|
-| Patient | trusted-path (primary) key | `0x01` |
-| Guardian | secondary key | `0x02` |
-
-Each consent event **MUST** be verified against the key of the party that
-claims to have produced it. An event claimed for one party but signed with the
-other party's key **MUST** be rejected with the same error as any other
-signature failure (§7).
+The party is declared by the `guardian` flag inside the signed record, and the frame **MUST** be verified under that party's key; a relabelled frame fails verification. The two keys **MUST** differ (§7.4). Each party has its own sequence (§7.5).
 
 ### 12.3 The safe-direction principle
 
-A transition is **exposure-reducing** if its target is `Suspended` or
-`Withdrawn`, and **exposure-increasing** if it is `Suspended → Granted`.
-`Granted → Granted` is idempotent and counts as neither.
+A transition to `Suspended` or `Withdrawn`, and every identity transition, **MAY** be applied by either party alone, and cancels any pending co-authorisation. The exposure-increasing transition, `Suspended → Granted`, **MUST NOT** take effect on the authority of one party; it requires both. The system can always be stopped by one party and resumed only by two.
 
-- Either party **MAY** apply any exposure-reducing transition unilaterally.
-  Stopping or pausing the flow **MUST NOT** require the other party.
-- An exposure-increasing transition (`Suspended → Granted`) **MUST NOT** take
-  effect on the authorisation of a single party. It **MUST** be authorised by
-  **both** parties.
+### 12.4 The co-authorisation window
 
-This is the central safety property of multi-party operation: the system can
-always be stopped by one party, and can only be resumed by two.
+When one party requests `Suspended → Granted`, the request is **pending**, armed at the kernel's monotonic time of receipt. It completes when the **other** party requests the same transition while the kernel's monotonic time is within the window of the arming instant. The window **MUST** be finite and non-zero; the reference default is two minutes. A matching request that arrives late, or from the same party, **MUST NOT** complete the transition; it re-arms the request from the arriving party. Windows **MUST** be measured on the kernel's clock and never on `timestamp_us` (§6.3).
 
-### 12.4 Co-authorisation window
+### 12.5 Terminal state
 
-An implementation **MUST** define a finite co-authorisation window. When one
-party authorises an exposure-increasing transition, the matching authorisation
-from the other party **MUST** arrive within the window, measured by the kernel
-monotonic timestamp (§6), for the transition to commit. A counter-authorisation
-that is older than the window, or that predates the first authorisation, **MUST
-NOT** commit; it **MAY** instead be treated as a fresh first authorisation from
-the arriving party. The reference implementation's default window is two
-minutes.
-
-### 12.5 Terminal state is unaffected
-
-`Withdrawn` remains terminal under multi-party operation. No combination of
-party authorisations may transition out of `Withdrawn`; the anti-coercion
-property of §3 holds unchanged.
+`Withdrawn` remains terminal. No combination of authorisations leaves it.
 
 ### 12.6 Reference implementation
 
-The reference implementation provides this section's semantics through the
-`dual_control` module (`DualControlMachine`, `Party`, `CoAuthOutcome`). The
-party-distinctness requirement of §12.3 is verified by the Kani harness
-`co_authorisation_requires_two_parties`.
+`DualControlMachine` in the `dual_control` module. Kani proves that two frames from the same party can never resume, and that one key cannot serve as both parties.
 
 ---
 
-## 13. References
+## 13. Evidence
 
-### 13.1 Normative
+| Requirement | Property | Evidence | Level |
+|:--|:--|:--|:--:|
+| §6.5 | Decoding is total; accepted records are canonical | Kani `wire_decode_is_total_and_canonical`; fuzz `frame_decode` | L1 |
+| §2.3 | Corruption reads as `Withdrawn` | Kani `stored_state_fails_closed`; exhaustive unit test | L1 |
+| §3.3 | `Withdrawn` is absorbing | Kani `withdrawn_is_absorbing`, `withdrawn_machine_stays_withdrawn`, `gate_withdrawal_is_absorbing` | L1 |
+| §7.1 | No change without authentication | Kani `no_transition_without_authentication`; 768-bit flip test; fuzz `auth_forgery` | L1 |
+| §7.5 | No sequence admitted twice | Kani `no_sequence_is_admitted_twice`; power-cycle test | L1 |
+| §9.2 | Commit only while `Granted` | Kani `gate_publishes_only_while_granted` | L1 |
+| §9.2 | No commit after a withdrawal is stored | loom: three models, every interleaving with at most three preemptions; real-thread test | model-checked |
+| §12.3 | One party cannot resume | Kani `one_party_cannot_resume` | L1 |
+| §12.2 | Distinct keys | Kani `one_key_cannot_be_both_parties` | L1 |
+| §7.3 | Strict verification | Conformance vectors 13, 14 and 19; tests | test |
+| §7.2 | Ed25519 correctness | `ed25519-dalek`; RFC 8032 keys | assumed |
+| §4 | Timing | — | none claimed |
 
-- **[AxonOS-Standard]** AxonOS Project. *The AxonOS Standard, version 1.0.0.* 2026. CC-BY-SA-4.0. https://github.com/AxonOS-org/axonos-standard
-- **[RFC2119]** Bradner, S. *Key words for use in RFCs to Indicate Requirement Levels.* RFC 2119, 1997.
-- **[RFC8174]** Leiba, B. *Ambiguity of Uppercase vs Lowercase in RFC 2119 Key Words.* RFC 8174, 2017.
-- **[RFC8949]** Bormann, C. & Hoffman, P. *Concise Binary Object Representation (CBOR).* RFC 8949, 2020.
-- **[Ed25519]** Bernstein, D. J. *Ed25519: high-speed high-security signatures.* 2011.
+The Kani proofs replace the signature verifier with one that answers `false`, `true` or either, so they hold whatever the real verifier decides; the verifier's own correctness is the one assumption, recorded in the last rows. No L2 or L3 claim is made at this revision.
 
-### 13.2 Informative
+---
 
-- **[Kani]** Kani Verification Project. https://model-checking.github.io/kani/
-- **[cargo-fuzz]** Rust Fuzzing Authority. *cargo-fuzz: a `cargo` subcommand for fuzzing with libFuzzer.* https://github.com/rust-fuzz/cargo-fuzz
-- **[ATECC608B]** Microchip Technology Inc. *ATECC608B CryptoAuthentication Device Datasheet.*
-- **[TrustZone-M]** ARM Limited. *ARMv8-M Architecture Reference Manual* — TrustZone-M chapter.
-- **[Capabilities]** Dennis, J. B. & Van Horn, E. C. *Programming Semantics for Multiprogrammed Computations.* CACM 9(3):143–155, 1966.
+## 14. References
+
+### 14.1 Normative
+
+- [AxonOS Standard](https://github.com/AxonOS-org/axonos-standard), Sections 11, 15, 16, 20 and 22.
+- [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119) and [RFC 8174](https://www.rfc-editor.org/rfc/rfc8174), key words.
+- [RFC 8032](https://www.rfc-editor.org/rfc/rfc8032), Edwards-Curve Digital Signature Algorithm (EdDSA).
+
+### 14.2 Informative
+
+- `ed25519-dalek` and `curve25519-dalek`, dalek-cryptography.
+- The Kani Rust Verifier, the model-checking project.
+- loom, the Tokio project: a model checker for concurrent Rust.
+
+---
+
+## Appendix A. Changes from 0.5.0
+
+| Area | 0.5.0 | 0.6.0 |
+|:--|:--|:--|
+| Wire format | 16-byte record; a 4-byte tag computed from the public key; the full signature "out of band" | Version 2: a 96-byte frame — a 32-byte record and its 64-byte Ed25519 signature (§6) |
+| Authentication | None that a public-key holder could not reproduce | Strict RFC 8032 verification before any field is trusted (§7) |
+| Replay | Not addressed | Per-signer sequence, consumed on every authentic frame, persisted (§7.5, §8) |
+| Terminal flag | Not checked against the state | Must agree with the state (§6.2) |
+| Bit 2 of flags | *replay-tolerant* | Retired, reserved |
+| Domain separation | None | Magic `AXC2` inside the signed message (§7.2) |
+| Data model | Described as compatible with a general-purpose encoding with depth and length bounds | A fixed binary layout with no second encoding (§6.5) |
+| Stored state | A corrupted byte trapped | Fails closed to `Withdrawn` (§2.3) |
+| Interlock | Read the state, then publish | Check and commit as one atomic step (§9.2) |
+| Dual control | Party asserted by the caller; window on the signer's timestamp | Party signed in the record; keys must differ; window on the kernel's clock (§12) |
+| Timing | A cycle figure for the tag path | Withdrawn; requirements only (§4) |
+| Evidence | Five harnesses, not compiled into the crate | Ten Kani proofs and three loom models, run in CI (§13) |
 
 ---
 
 ## Authorship and licensing
 
-**Author:** Denis Yermakou.
+**Author:** Denis Yermakou, The AxonOS Project.
 
-**Specification text:** Released under [CC-BY-SA-4.0](./LICENSE-CC-BY-SA).
-**Reference code:** Released under [Apache-2.0 OR MIT](./LICENSE).
+The specification text is released under [CC-BY-SA-4.0](./LICENSE-CC-BY-SA); the reference code under [Apache-2.0 OR MIT](./LICENSING.md); the conformance vectors under [CC0-1.0](./vectors/LICENSE).
 
-This is a solo specification of the AxonOS Project. There are no external co-authors. The historical sequence of versions on this repository may include earlier drafts attributing collaborations that are not part of this specification; v0.3.0 supersedes all such drafts. Where v0.3.0 disagrees with an earlier draft on the consent semantics, v0.3.0 wins.
+To cite this specification:
 
-Cite as:
+> Yermakou, D. (2026). *AxonOS Consent Specification, version 0.6.0.* The AxonOS Project. CC-BY-SA-4.0. https://github.com/AxonOS-org/axonos-consent
 
-> Yermakou, D. (2026). *AxonOS Consent Specification, version 0.4.0.* The AxonOS Project. CC-BY-SA-4.0. https://github.com/AxonOS-org/axonos-consent
-
-A BibTeX entry is available in [`docs/citation.bib`](./docs/citation.bib).
-
----
-
-**End of SPEC.md.**
+<sub>© 2026 Denis Yermakou · The AxonOS Project · connect@axonos.org</sub>

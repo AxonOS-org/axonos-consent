@@ -1,32 +1,31 @@
-//! The consent finite-state machine.
-//!
-//! Three states: `Granted`, `Suspended`, `Withdrawn`. `Withdrawn` is terminal.
-//!
-//! See [SPEC §2 and §3](https://github.com/AxonOS-org/axonos-consent/blob/main/SPEC.md)
-//! for the normative semantics.
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+// SPDX-FileCopyrightText: 2026 Denis Yermakou <connect@axonos.org>
 
-use core::sync::atomic::{AtomicU8, Ordering};
+//! The consent state machine: three states, seven admissible transitions.
+//!
+//! This module is pure. It holds no state and performs no I/O; the machines in
+//! [`crate::machine`] and [`crate::dual_control`] own the state and apply these
+//! rules to it.
 
 use crate::error::ConsentError;
-use crate::wire::ConsentEvent;
 
-/// One of the three consent states.
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+/// One of the three consent states (SPEC §2.1).
+#[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
 #[repr(u8)]
 pub enum ConsentState {
-    /// Observations flow normally.
+    /// Observations flow.
     Granted = 0x01,
-    /// Observations do not flow; consumers receive a typed backpressure error.
-    /// Resumable to `Granted` through the trusted path.
+    /// Observations do not flow. Resumable through the trusted path.
     Suspended = 0x02,
-    /// Streams terminated. Terminal — requires fresh manifest install.
+    /// Observations never flow again for this installation. Terminal.
     Withdrawn = 0x03,
 }
 
 impl ConsentState {
-    /// Decode from the on-wire discriminant byte.
-    pub fn from_u8(b: u8) -> Result<Self, ConsentError> {
-        match b {
+    /// Decode a discriminant received on the wire. Strict: any other byte is
+    /// refused (SPEC §2.1).
+    pub const fn from_wire(byte: u8) -> Result<Self, ConsentError> {
+        match byte {
             0x01 => Ok(Self::Granted),
             0x02 => Ok(Self::Suspended),
             0x03 => Ok(Self::Withdrawn),
@@ -34,110 +33,34 @@ impl ConsentState {
         }
     }
 
-    /// True if this state is terminal (i.e., `Withdrawn`).
-    pub fn is_terminal(&self) -> bool {
-        matches!(self, ConsentState::Withdrawn)
+    /// Decode a byte read back from storage or from the publication gate.
+    /// Fail-closed: a byte that is not `Granted` or `Suspended` reads as
+    /// `Withdrawn`, so corruption can stop observations but never start them
+    /// (SPEC §2.3).
+    pub const fn from_stored(byte: u8) -> Self {
+        match byte {
+            0x01 => Self::Granted,
+            0x02 => Self::Suspended,
+            _ => Self::Withdrawn,
+        }
+    }
+
+    /// The discriminant byte.
+    pub const fn as_u8(self) -> u8 {
+        self as u8
+    }
+
+    /// True for `Withdrawn`, the only terminal state.
+    pub const fn is_terminal(self) -> bool {
+        matches!(self, Self::Withdrawn)
     }
 }
 
-/// The consent state machine for one manifest installation.
-pub struct ConsentMachine {
-    manifest_id: u16,
-    trusted_path_pubkey: [u8; 32],
-    state: AtomicU8,
-}
-
-impl ConsentMachine {
-    /// Create a new machine for a freshly installed manifest. Initial state is
-    /// `Granted` per SPEC §2.2.
-    pub fn new(manifest_id: u16, trusted_path_pubkey: [u8; 32]) -> Self {
-        Self {
-            manifest_id,
-            trusted_path_pubkey,
-            state: AtomicU8::new(ConsentState::Granted as u8),
-        }
-    }
-
-    /// Current state. Reads with acquire ordering so the IPC publication path
-    /// sees the latest state from the writer.
-    pub fn state(&self) -> ConsentState {
-        // The invariant maintained by handle_event() is that the byte stored in
-        // the atomic is always one of the three discriminants. A value outside
-        // that set indicates a memory-corruption event already; we trap with
-        // unreachable!() which is implemented as a panic.
-        match self.state.load(Ordering::Acquire) {
-            0x01 => ConsentState::Granted,
-            0x02 => ConsentState::Suspended,
-            0x03 => ConsentState::Withdrawn,
-            other => unreachable!("invariant violated: state byte = 0x{:02X}", other),
-        }
-    }
-
-    /// Process one trusted-path event. Returns the resulting state on success.
-    ///
-    /// SPEC §4.1: the analytical bound on this function is ≤ 1648 cycles
-    /// (instruction-count derived, not a Kani output). The Kani harness
-    /// `handle_withdraw_terminates` proves termination and target-state
-    /// correctness, which is the L1 claim.
-    pub fn handle_event(&mut self, event: ConsentEvent) -> Result<ConsentState, ConsentError> {
-        if event.manifest_id != self.manifest_id {
-            return Err(ConsentError::ManifestMismatch);
-        }
-
-        crate::crypto::verify_truncated(&event, &self.trusted_path_pubkey)?;
-
-        let target = ConsentState::from_u8(event.state)?;
-        let current = self.state();
-
-        if !is_admissible_transition(current, target) {
-            return Err(ConsentError::InadmissibleTransition);
-        }
-
-        self.state.store(target as u8, Ordering::SeqCst);
-        Ok(target)
-    }
-
-    /// The manifest ID this machine is bound to.
-    pub fn manifest_id(&self) -> u16 {
-        self.manifest_id
-    }
-
-    /// Apply an already-authenticated transition without re-running signature
-    /// verification.
-    ///
-    /// Crate-internal. The only caller is the [`crate::dual_control`] layer,
-    /// which performs its own two-key verification before committing a
-    /// co-authorised transition. This method still re-checks admissibility as
-    /// defence-in-depth, so it can never drive the machine through an
-    /// inadmissible transition even if a caller passes a wrong target.
-    pub(crate) fn apply_verified(
-        &mut self,
-        target: ConsentState,
-    ) -> Result<ConsentState, ConsentError> {
-        let current = self.state();
-        if !is_admissible_transition(current, target) {
-            return Err(ConsentError::InadmissibleTransition);
-        }
-        self.state.store(target as u8, Ordering::SeqCst);
-        Ok(target)
-    }
-
-    /// Crate-internal read access to the trusted-path (patient) public key,
-    /// used by the dual-control layer to verify patient-originated events.
-    pub(crate) fn trusted_path_pubkey(&self) -> &[u8; 32] {
-        &self.trusted_path_pubkey
-    }
-}
-
-/// Is the transition `from → to` admissible per SPEC §3.1?
+/// Is `from → to` admissible (SPEC §3.1)?
 ///
-/// Made `pub` so test code and the kernel interlock can query the transition
-/// graph without instantiating a machine.
-///
-/// Admissible transitions: identity (idempotent re-application), pause/resume,
-/// and revocation from either active state. The two inadmissible transitions
-/// (`Withdrawn → Granted` and `Withdrawn → Suspended`) are not in the match
-/// arm, so this function returns false for them.
+/// Seven transitions are: the three identities, pause and resume, and
+/// withdrawal from either active state. The two transitions out of `Withdrawn`
+/// are not.
 pub const fn is_admissible_transition(from: ConsentState, to: ConsentState) -> bool {
     use ConsentState::{Granted, Suspended, Withdrawn};
     matches!(
@@ -152,58 +75,62 @@ pub const fn is_admissible_transition(from: ConsentState, to: ConsentState) -> b
     )
 }
 
+/// Does `from → to` increase exposure (SPEC §12.3)? Only `Suspended → Granted`
+/// does; under dual control it needs both parties.
+pub const fn is_exposure_increasing(from: ConsentState, to: ConsentState) -> bool {
+    matches!((from, to), (ConsentState::Suspended, ConsentState::Granted))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ConsentState::{Granted, Suspended, Withdrawn};
+
+    const ALL: [ConsentState; 3] = [Granted, Suspended, Withdrawn];
 
     #[test]
-    fn admissible_transitions_per_spec() {
-        use ConsentState::{Granted, Suspended, Withdrawn};
-        for (from, to) in [
-            (Granted, Granted),
-            (Suspended, Suspended),
-            (Withdrawn, Withdrawn),
-            (Granted, Suspended),
-            (Suspended, Granted),
-            (Granted, Withdrawn),
-            (Suspended, Withdrawn),
-        ] {
-            assert!(
-                is_admissible_transition(from, to),
-                "expected admissible: {:?} → {:?}",
-                from,
-                to
-            );
-        }
+    fn exactly_seven_transitions_are_admissible() {
+        let admitted = ALL
+            .iter()
+            .flat_map(|&f| ALL.iter().map(move |&t| (f, t)))
+            .filter(|&(f, t)| is_admissible_transition(f, t))
+            .count();
+        assert_eq!(admitted, 7);
         assert!(!is_admissible_transition(Withdrawn, Granted));
         assert!(!is_admissible_transition(Withdrawn, Suspended));
     }
 
     #[test]
-    fn withdrawn_is_terminal() {
-        assert!(ConsentState::Withdrawn.is_terminal());
-        assert!(!ConsentState::Granted.is_terminal());
-        assert!(!ConsentState::Suspended.is_terminal());
-    }
-
-    #[test]
-    fn from_u8_round_trips_known_states() {
-        for s in [
-            ConsentState::Granted,
-            ConsentState::Suspended,
-            ConsentState::Withdrawn,
-        ] {
-            assert_eq!(ConsentState::from_u8(s as u8).unwrap(), s);
+    fn only_resume_increases_exposure() {
+        for f in ALL {
+            for t in ALL {
+                assert_eq!(is_exposure_increasing(f, t), (f, t) == (Suspended, Granted));
+            }
         }
     }
 
     #[test]
-    fn from_u8_rejects_unknown() {
-        for b in [0x00u8, 0x04, 0x10, 0x7F, 0xFF] {
-            assert!(matches!(
-                ConsentState::from_u8(b),
+    fn wire_decoding_is_strict() {
+        for s in ALL {
+            assert_eq!(ConsentState::from_wire(s.as_u8()), Ok(s));
+        }
+        for b in [0x00u8, 0x04, 0x7F, 0xFF] {
+            assert_eq!(
+                ConsentState::from_wire(b),
                 Err(ConsentError::ReservedDiscriminant)
-            ));
+            );
+        }
+    }
+
+    #[test]
+    fn stored_decoding_fails_closed() {
+        for b in 0..=u8::MAX {
+            let s = ConsentState::from_stored(b);
+            match b {
+                0x01 => assert_eq!(s, Granted),
+                0x02 => assert_eq!(s, Suspended),
+                _ => assert_eq!(s, Withdrawn),
+            }
         }
     }
 }

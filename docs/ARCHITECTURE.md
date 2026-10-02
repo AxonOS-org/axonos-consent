@@ -1,98 +1,75 @@
-# Architecture (informative)
+# Architecture
 
-This document is the informative companion to [SPEC.md](../SPEC.md). It explains
-**how** the consent subsystem is designed and implemented, while the SPEC defines
-**what** any conformant implementation must do.
+`axonos-consent` turns a signed frame from the trusted path into a consent
+decision, and makes that decision the one thing every observation must pass.
+This page shows how the pieces fit; [SPEC.md](../SPEC.md) is normative, and
+[DESIGN-RATIONALE.md](./DESIGN-RATIONALE.md) explains the choices.
 
-If this document disagrees with SPEC, SPEC wins.
+## 1. Where it sits
 
----
+```text
+ trusted path ──signed frame──▶ kernel ───────────────────────────────────────────┐
+ (button, Secure-World UI)        │                                               │
+                                  ▼                                               │
+                        ConsentMachine::handle()                                   │
+                                  │ admits, then stores the state                 │
+                                  ▼                                               │
+ signal pipeline ──observation──▶ PublicationGate::try_publish() ──▶ SPSC ring ──▶ SDK ──▶ application
+                                  │                                       ▲
+                                  └─ refused: 0x05 suspended · 0x06 withdrawn ┘
+```
 
-## 1. The three structural choices
+The application never talks to the machine. It can ask the person to use the
+trusted path; it cannot use it for them.
 
-### 1.1 FSM, not Boolean
+## 2. Modules
 
-A two-state Boolean (on/off) consent system cannot represent the difference
-between "the user paused temporarily" (resumable) and "the user revoked"
-(terminal). Conflating the two would either (a) lose pause-as-an-option, or
-(b) lose the anti-coercion guarantee of `Withdrawn` being terminal. The
-three-state FSM is the minimum that preserves both.
+| Module | Responsibility | Holds state? |
+|:--|:--|:--:|
+| `wire` | Split a frame, decode and validate the record, encode a record | no |
+| `auth` | Verify the signature under the named party's key; mint `Authenticated` | no |
+| `state` | The three states, the seven admissible pairs, failing closed | no |
+| `gate` | Consent state and publication count in one `AtomicU32` | yes |
+| `machine` | Single-party admission: manifest, sequence, transition | yes |
+| `dual_control` | Two parties, the safe direction, the window on the kernel's clock | yes |
+| `proofs` | Kani harnesses, compiled only under `cfg(kani)` | — |
 
-### 1.2 Kernel-level, not application-level
+The pure modules can be read, tested and proved in isolation; the stateful ones
+are small compositions of them.
 
-Consent at the application level fails in the four ways enumerated in SPEC §11
-(application bugs, late updates, in-flight data, out-of-band changes).
-Lifting consent below the application layer is what makes withdrawal
-enforceable rather than advisory.
+## 3. Admitting a frame
 
-### 1.3 Trusted path is hardware-coupled
+`ConsentMachine::handle` runs the checks of SPEC §7.6 in order: shape (wire),
+signature (auth), manifest, sequence, transition (state). Only after all of them
+does it store the new state, with one atomic write into the gate. A transition
+needs `&mut self`, so transitions are serialized by the borrow checker; the
+gate is read through `&self`, so the publication path never waits for one.
 
-If the consent event could be synthesised by software, the kernel could not
-distinguish a user revocation from an application masquerading. The trusted
-path therefore couples to hardware: either a physical button on a discrete GPIO
-line, or a Secure-World UI partition under TrustZone-M. Both are
-software-unforgeable from the Normal World.
+## 4. Publishing an observation
 
----
+The producer of each SPSC ring follows a two-step protocol:
 
-## 2. The 16-byte wire format
+1. write the observation into slot `gate.published() % capacity`;
+2. call `gate.try_publish()`. `Ok` makes the slot visible to the consumer;
+   `Err(Suppressed)` means consent is not granted, and the slot is abandoned.
 
-The 16-byte size was selected to fit exactly within one half of a 32-byte ARM
-cache line, ensuring that one consent event fits in a single coherency unit.
-A larger record would either span two cache lines (introducing torn-read
-hazards) or waste space; a smaller record could not carry enough state to be
-useful.
+The consumer reads `gate.published()` with acquire ordering and reads only
+committed slots. Because the state and the count are one word, a withdrawal and
+a commit are totally ordered: there is no instant at which a withdrawn state
+and a fresh commit can coexist. `loom` checks this under every interleaving.
 
-Byte budget:
+## 5. Persistence
 
-- 1 byte state, 1 byte flags = 2 bytes (discriminant + bits)
-- 2 bytes manifest_id (16 bits, supporting 64k concurrent installs)
-- 8 bytes timestamp_us (64 bits, ~584,000 years at 1 µs)
-- 4 bytes sig_truncated (fast integrity)
+After each admitted frame, the kernel writes `machine.persisted()` — the state
+and the last sequence from each signer — atomically, before acknowledging the
+trusted path. At boot it rebuilds the machine with `restore`. A pending
+co-authorisation is deliberately not persisted.
 
-= 16 bytes total.
+## 6. Bringing your own verifier
 
-The trade-off: 4 bytes of integrity check is collision-resistant against
-accidental corruption (~ 2^32) but is **not** an authentication. The full
-64-byte Ed25519 verification is invoked out-of-band by the trusted-path
-crypto path before admission.
+With the `ed25519` feature off, the crate has no dependencies, and the
+integrator supplies a `SignatureVerifier` — typically a secure element. The
+trait asks for strict RFC 8032 verification and a key check; the type system
+ensures that whatever verifier is supplied is consulted on every frame.
 
----
-
-## 3. Why constant-time signature verification
-
-A timing side channel on signature verification could leak the trusted-path
-key over many tries. The constant-time property is enforced by:
-
-- The `ct_eq_u32` function uses XOR + arithmetic operations only, no branches.
-- The full Ed25519 path runs on the ATECC608B secure element on the reference
-  hardware, which has hardware-side-channel resistance certified at the chip
-  level.
-
-L1 evidence comes from Kani harness `signature_verification_constant_time`.
-
----
-
-## 4. Why `#![no_std]`
-
-The kernel is `#![no_std]`. The consent subsystem must live in the same
-linker domain. A heap allocator on the consent path would break the bounded-
-execution property — heap allocation is unbounded in general.
-
-`#![forbid(unsafe_code)]` is also set. The crate compiles to a binary with no
-`unsafe` blocks; memory safety is structural.
-
----
-
-## 5. Verification methodology
-
-Four Kani harnesses provide L1 evidence:
-
-- `handle_withdraw_terminates` — bounded cycles per transition.
-- `fsm_no_invalid_transitions` — admissibility predicate is correct.
-- `cbor_decoder_bounded` — wire-format size enforcement.
-- `signature_verification_constant_time` — no branches on signature value.
-
-L2 evidence comes from soak runs on the reference hardware. The
-[claims catalogue](https://github.com/AxonOS-org/axonos-standard/blob/main/validation/claims.md)
-in the canonical Standard documents each measurement.
+<sub>© 2026 Denis Yermakou · The AxonOS Project · connect@axonos.org</sub>

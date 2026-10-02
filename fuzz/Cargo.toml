@@ -9,21 +9,11 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
-
-[dependencies.axonos-consent]
-path = ".."
-
-# Each target is a separate libFuzzer binary.
-[[bin]]
-name = "wire_decode"
-path = "fuzz_targets/wire_decode.rs"
-test = false
-doc = false
-bench = false
+axonos-consent = { path = "..", features = ["ed25519"] }
 
 [[bin]]
-name = "roundtrip"
-path = "fuzz_targets/roundtrip.rs"
+name = "frame_decode"
+path = "fuzz_targets/frame_decode.rs"
 test = false
 doc = false
 bench = false
@@ -35,6 +25,12 @@ test = false
 doc = false
 bench = false
 
-# Empty table: detaches fuzz/ into its own workspace so it is not pulled
-# into the parent crate's build graph. The parent crate stays zero-dependency.
+[[bin]]
+name = "auth_forgery"
+path = "fuzz_targets/auth_forgery.rs"
+test = false
+doc = false
+bench = false
+
 [workspace]
+members = ["."]

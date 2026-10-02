@@ -1,58 +1,84 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+// SPDX-FileCopyrightText: 2026 Denis Yermakou <connect@axonos.org>
+
 //! # axonos-consent
 //!
-//! Protocol-level consent enforcement for AxonOS.
+//! Consent enforcement for brain–computer interfaces: the reference
+//! implementation of the [AxonOS Consent Specification](https://github.com/AxonOS-org/axonos-consent/blob/main/SPEC.md).
 //!
-//! This crate implements the [AxonOS Consent Specification v0.5.0](https://github.com/AxonOS-org/axonos-consent/blob/main/SPEC.md) —
-//! a kernel-level finite-state machine with three states (`Granted`, `Suspended`,
-//! `Withdrawn`) that mediates user permission for `IntentObservation` flow.
-//! Version 0.5.0 adds an optional multi-party (guardian) co-authorisation
-//! layer for clinical deployments; see [`dual_control`].
-//!
-//! The crate is `#![no_std]` and is built for ARMv8-M Cortex-M targets, but the
-//! types are platform-agnostic and run unchanged on hosted Rust for unit testing.
-//!
-//! # Quickstart
+//! A consent decision arrives from the trusted path as a 96-byte frame: a
+//! 32-byte record and its Ed25519 signature. The machine admits it only if the
+//! signature verifies under the trusted-path key, the sequence number is fresh,
+//! and the transition is admissible; the new state then governs every
+//! publication through one atomic word.
 //!
 //! ```
-//! use axonos_consent::{ConsentMachine, ConsentState};
+//! # #[cfg(feature = "ed25519")] {
+//! use axonos_consent::{ConsentMachine, ConsentState, Ed25519Strict};
+//! # use ed25519_dalek::{Signer, SigningKey};
+//! # use axonos_consent::wire::{assemble, ConsentRecord};
+//! # let signer = SigningKey::from_bytes(&[7u8; 32]);
+//! # let trusted_key = signer.verifying_key().to_bytes();
+//! # let sign = |r: ConsentRecord| assemble(&r, &signer.sign(&r.encode()).to_bytes());
 //!
-//! let manifest_id: u16 = 1;
-//! let trusted_path_pubkey = [0u8; 32];
-//! let machine = ConsentMachine::new(manifest_id, trusted_path_pubkey);
+//! let mut machine = ConsentMachine::new(1, trusted_key, Ed25519Strict)?;
 //! assert_eq!(machine.state(), ConsentState::Granted);
+//!
+//! // A signed withdrawal from the trusted path.
+//! let frame = sign(ConsentRecord::new(ConsentState::Withdrawn, 1, 1, 0));
+//! assert_eq!(machine.handle(&frame)?, ConsentState::Withdrawn);
+//!
+//! // From now on, no observation can be published.
+//! assert!(machine.gate().try_publish().is_err());
+//!
+//! // The same frame again is a replay.
+//! assert!(machine.handle(&frame).is_err());
+//! # }
+//! # Ok::<(), axonos_consent::ConsentError>(())
 //! ```
 //!
-//! # Authorship
+//! ## Layers
 //!
-//! Specification and reference implementation by **Denis Yermakou**.
-//! The AxonOS Project.
+//! | Module | Property | Evidence |
+//! |:--|:--|:--|
+//! | [`wire`] | decoding is total and canonical | Kani |
+//! | [`auth`] | no transition without a valid signature | Kani |
+//! | [`machine`] | no sequence number is admitted twice | Kani |
+//! | [`state`] | `Withdrawn` is absorbing | Kani |
+//! | [`gate`] | no publication after a withdrawal | loom |
+//! | [`dual_control`] | one party can stop, only two can resume | Kani, tests |
 //!
-//! # License
-//!
-//! - Code: Apache-2.0 OR MIT
-//! - Specification text: CC-BY-SA-4.0
-//! - Test vectors: CC0-1.0
+//! The crate is `#![no_std]`, forbids `unsafe`, never allocates and never
+//! panics on any input.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 #![deny(unused_must_use)]
 
-pub mod crypto;
+pub mod auth;
 pub mod dual_control;
 pub mod error;
-pub mod interlock;
+pub mod gate;
+pub mod machine;
 pub mod state;
 pub mod wire;
 
-pub use crate::dual_control::{CoAuthOutcome, DualControlMachine, Party};
+#[cfg(kani)]
+mod proofs;
+
+#[cfg(feature = "ed25519")]
+pub use crate::auth::Ed25519Strict;
+pub use crate::auth::{Authenticated, SignatureVerifier};
+pub use crate::dual_control::{CoAuthOutcome, DualControlMachine};
 pub use crate::error::ConsentError;
-pub use crate::interlock::ObservationGate;
-pub use crate::state::{ConsentMachine, ConsentState};
-pub use crate::wire::ConsentEvent;
+pub use crate::gate::{PublicationGate, Suppressed};
+pub use crate::machine::{ConsentMachine, Persisted};
+pub use crate::state::ConsentState;
+pub use crate::wire::{ConsentRecord, Party};
 
-/// Specification version this crate implements.
-pub const SPEC_VERSION: &str = "0.5.0";
+/// The version of the AxonOS Consent Specification this crate implements.
+pub const SPEC_VERSION: &str = "0.6.0";
 
-/// Crate version (independent of spec version after v0.3.0).
+/// The crate version.
 pub const CRATE_VERSION: &str = env!("CARGO_PKG_VERSION");

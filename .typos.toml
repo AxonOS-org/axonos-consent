@@ -14,8 +14,6 @@ extend-exclude = [
 als = "als"   # Amyotrophic Lateral Sclerosis — medical term, not a typo for ALSO
 # "if and only if" — used in the spec and proofs
 iff = "iff"
-# truncated-tag accumulator variable
-acc = "acc"
 
 [default.extend-identifiers]
 # Cryptographic / embedded identifiers that resemble dictionary words

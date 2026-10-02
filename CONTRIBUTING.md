@@ -17,7 +17,7 @@ It is safety-relevant infrastructure, so the bar for changes is deliberately hig
 ## Development environment
 
 This is a `#![no_std]`, `#![forbid(unsafe_code)]` crate. The minimum supported
-Rust version is **1.75.0**.
+Rust version is **1.85**.
 
 ```bash
 rustup toolchain install stable
@@ -32,23 +32,25 @@ Every change must pass, locally, the same checks CI enforces:
 cargo fmt --all --check
 cargo clippy --all-features --all-targets -- -D warnings
 cargo test --all-features
-cargo test --no-default-features          # no_std surface
-python3 tools/verify_consent_repository.py repository-contract   # and the other checks
+cargo test --no-default-features          # no_std surface, no dependencies
+python3 tools/check.py                    # versions, vectors, SPDX, claims, links, badges
 ```
 
 For changes to the state machine, the wire format, or the cryptographic surface,
 run the formal harnesses as well:
 
 ```bash
-cargo kani            # the five Kani proof harnesses under kani/
-cargo +nightly fuzz run wire_decode      # and the other fuzz targets, briefly
+cargo kani --no-default-features                              # the ten proofs in src/proofs.rs
+RUSTFLAGS="--cfg loom" cargo test --release --lib loom        # the gate under every interleaving
+cargo +nightly fuzz run auth_forgery -- -max_total_time=60    # and frame_decode, fsm_sequence
 ```
 
 If you change the wire format or the admissible-transition set, regenerate and
 re-verify the conformance vectors:
 
 ```bash
-cd vectors && sha256sum -c SHA256SUMS
+cargo run --example gen_vectors --features std     # rewrite vectors/
+python3 tools/check.py --write                     # rewrite vectors/SHA256SUMS
 ```
 
 ## Evidence discipline
@@ -70,8 +72,8 @@ only. See [`docs/privacy-boundary.md`](./docs/privacy-boundary.md).
 
 - Use clear, conventional commit subjects (`fix:`, `feat:`, `docs:`, `ci:`,
   `security:`, `chore(release): vX.Y.Z`).
-- Update [`CHANGELOG.md`](./CHANGELOG.md) under `## [Unreleased]` for any
-  user-visible change.
+- Update [`CHANGELOG.md`](./CHANGELOG.md) under a new `## [Unreleased]` heading
+  for any user-visible change.
 - Keep the public API stable; the crate is `0.y.z` and the surface is not yet
   locked, but breaking changes must be called out explicitly in the pull request.
 - Fill in the pull-request template, including the security and privacy review
@@ -85,3 +87,5 @@ See [`SECURITY.md`](./SECURITY.md) and email **security@axonos.org**.
 ## Questions
 
 General questions: **connect@axonos.org**.
+
+<sub>© 2026 Denis Yermakou · The AxonOS Project · connect@axonos.org</sub>

@@ -1,40 +1,50 @@
-//! L2 benchmark: withdrawal latency on the host CPU.
-//!
-//! Reference hardware analytical bound is ≤ 1648 cycles (≈ 9.8 µs at 168 MHz
-//! Cortex-M4F). See SPEC §4.1 for what backs that figure and what does not.
-//! Host CPUs are much faster, so this bench measures a lower bound; useful for
-//! catching regressions.
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+// SPDX-FileCopyrightText: 2026 Denis Yermakou <connect@axonos.org>
 
-use axonos_consent::crypto::compute_tag;
-use axonos_consent::wire::FLAG_TERMINAL;
-use axonos_consent::{ConsentEvent, ConsentMachine};
+//! Host-only timings: `cargo bench --features std`.
+//!
+//! These numbers describe the machine you run them on, not a Cortex-M target,
+//! and are not evidence for any bound in the specification. They exist to
+//! catch regressions and to show where the time goes: almost all of it in
+//! Ed25519 verification, almost none in the state machine.
+
+use std::hint::black_box;
 use std::time::Instant;
 
+use axonos_consent::wire::{assemble, ConsentRecord};
+use axonos_consent::{ConsentMachine, ConsentState, Ed25519Strict, PublicationGate};
+use ed25519_dalek::{Signer, SigningKey};
+
+const N: u64 = 2_000;
+
 fn main() {
-    const N: usize = 1_000_000;
-    let pk = [0xAAu8; 32];
-
-    let event = {
-        let mut e = ConsentEvent {
-            state: 0x03,
-            flags: FLAG_TERMINAL,
-            manifest_id: 1,
-            timestamp_us: 1_000_000,
-            sig_truncated: 0,
-        };
-        e.sig_truncated = compute_tag(&e, &pk);
-        e
-    };
-
+    let key = SigningKey::from_bytes(&[0x42; 32]);
+    let frames: Vec<_> = (1..=N)
+        .map(|seq| {
+            let state = if seq % 2 == 1 {
+                ConsentState::Suspended
+            } else {
+                ConsentState::Granted
+            };
+            let record = ConsentRecord::new(state, 1, seq, seq);
+            assemble(&record, &key.sign(&record.encode()).to_bytes())
+        })
+        .collect();
+    let mut machine =
+        ConsentMachine::new(1, key.verifying_key().to_bytes(), Ed25519Strict).expect("key");
     let start = Instant::now();
-    for _ in 0..N {
-        let mut m = ConsentMachine::new(1, pk);
-        let _ = m.handle_event(event);
+    for frame in &frames {
+        black_box(machine.handle(black_box(frame)).expect("admitted"));
     }
-    let elapsed = start.elapsed();
+    let per_frame = start.elapsed().as_nanos() / u128::from(N);
 
-    println!("benchmark: {} withdrawals", N);
-    println!("  total elapsed: {:?}", elapsed);
-    println!("  per withdrawal: {:?}", elapsed / N as u32);
-    println!("  bound on reference hardware: ≤ 9.8 µs (L1)");
+    let gate = PublicationGate::new();
+    let start = Instant::now();
+    for _ in 0..N * 1_000 {
+        black_box(gate.try_publish().ok());
+    }
+    let per_publish = start.elapsed().as_nanos() as f64 / (N * 1_000) as f64;
+
+    println!("host · handle() with Ed25519 verification: {per_frame} ns per frame");
+    println!("host · try_publish():                      {per_publish:.1} ns per commit");
 }

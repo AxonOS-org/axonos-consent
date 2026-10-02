@@ -2,342 +2,205 @@
 
 # axonos-consent
 
-### Protocol-level consent enforcement for AxonOS.
+**Consent for brain–computer interfaces, enforced by the kernel.**<br>
+Authenticated with Ed25519. Replay-proof. Final the instant it is withdrawn.
 
-#### A kernel-level finite-state machine with formally bounded withdrawal latency.
+<sub>The reference implementation of the <a href="./SPEC.md">AxonOS Consent Specification 0.6.0</a> · Rust · <code>no_std</code> · part of <a href="https://axonos.org">AxonOS</a></sub>
 
-[![CI](https://github.com/AxonOS-org/axonos-consent/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/AxonOS-org/axonos-consent/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/AxonOS-org/axonos-consent?style=flat-square&label=Release&color=0a4a8f)](https://github.com/AxonOS-org/axonos-consent/releases)
-[![Spec](https://img.shields.io/badge/Spec-v0.5.0-0a4a8f?style=flat-square)](./SPEC.md)
-[![Standard](https://img.shields.io/badge/Standard-v1.0.0-0a4a8f?style=flat-square)](https://github.com/AxonOS-org/axonos-standard)
-[![Rust](https://img.shields.io/badge/Rust-no__std-CE422B?style=flat-square&logo=rust&logoColor=white)](https://www.rust-lang.org/)
+<br>
 
-[![Verified](https://img.shields.io/badge/Verified-Kani%20BMC%20%C3%975-0d7a5f?style=flat-square)](./kani/)
-[![Unsafe](https://img.shields.io/badge/Unsafe-forbidden-0d7a5f?style=flat-square)](./src/lib.rs)
-[![Critical path](https://img.shields.io/badge/Critical%20path-0%20alloc-0d7a5f?style=flat-square)](./SPEC.md#4-timing-bounds)
-[![Cycle bound](https://img.shields.io/badge/Cycle%20bound-%E2%89%A4%201648%20%C2%B7%20analytical-8a6100?style=flat-square)](./SPEC.md#4-timing-bounds)
+[![CI](https://img.shields.io/github/actions/workflow/status/AxonOS-org/axonos-consent/ci.yml?branch=main&style=flat-square&label=CI&labelColor=0d1117)](https://github.com/AxonOS-org/axonos-consent/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/AxonOS-org/axonos-consent?style=flat-square&label=release&labelColor=0d1117&color=1f8fae)](https://github.com/AxonOS-org/axonos-consent/releases)
+[![Proofs](https://img.shields.io/badge/proofs-Kani%20%C2%B7%2010%20harnesses-0d7a5f?style=flat-square&labelColor=0d1117)](./src/proofs.rs)
+[![Concurrency](https://img.shields.io/badge/concurrency-loom%20model--checked-0d7a5f?style=flat-square&labelColor=0d1117)](./src/gate.rs)
+[![Conformance](https://img.shields.io/badge/conformance-20%20vectors%20%C2%B7%20CC0-1f8fae?style=flat-square&labelColor=0d1117)](./vectors/)
 
-[![License (code)](https://img.shields.io/badge/License%20code-Apache--2.0%20OR%20MIT-475569?style=flat-square)](./LICENSE)
-[![License (spec)](https://img.shields.io/badge/License%20spec-CC--BY--SA--4.0-475569?style=flat-square)](./LICENSE-CC-BY-SA)
-[![MSRV](https://img.shields.io/badge/MSRV-1.75-475569?style=flat-square)](./Cargo.toml)
+[![no_std](https://img.shields.io/badge/no__std-yes-475569?style=flat-square&labelColor=0d1117)](./src/lib.rs)
+[![unsafe](https://img.shields.io/badge/unsafe-forbidden-475569?style=flat-square&labelColor=0d1117)](./src/lib.rs)
+[![Ed25519](https://img.shields.io/badge/Ed25519-RFC%208032%20strict-475569?style=flat-square&labelColor=0d1117)](./SPEC.md#7-authentication)
+[![MSRV](https://img.shields.io/badge/MSRV-1.85-475569?style=flat-square&labelColor=0d1117)](./Cargo.toml)
+[![License](https://img.shields.io/badge/license-Apache--2.0%20OR%20MIT-475569?style=flat-square&labelColor=0d1117)](./LICENSING.md)
 
----
+[![AxonOS Standard](https://img.shields.io/badge/AxonOS-Standard%20v1.0.0-1f8fae?style=flat-square&labelColor=0d1117)](https://github.com/AxonOS-org/axonos-standard)
+[![AxonOS Radar](https://img.shields.io/endpoint?url=https%3A%2F%2Faxonos-bci.github.io%2Faxonos-community-radar%2Fbadges%2FAxonOS-org%2Faxonos-consent.json&style=flat-square&labelColor=0d1117)](https://axonos-bci.github.io/axonos-community-radar/)
+[![axonos.org](https://img.shields.io/badge/axonos.org-project-1f8fae?style=flat-square&labelColor=0d1117)](https://axonos.org)
 
-[**Specification**](./SPEC.md) · [Architecture](./docs/ARCHITECTURE.md) · [Security model](./docs/SECURITY-MODEL.md) · [Design rationale](./docs/DESIGN-RATIONALE.md) · [Test vectors](./vectors/) · [Changelog](./CHANGELOG.md)
+**[Specification](./SPEC.md)** · **[Security model](./docs/SECURITY-MODEL.md)** · **[Architecture](./docs/ARCHITECTURE.md)** · **[Conformance vectors](./vectors/)** · **[Changelog](./CHANGELOG.md)** · **[Security policy](./SECURITY.md)**
 
 </div>
 
----
-
-## What this repository is
-
-1. The **[AxonOS Consent Specification](./SPEC.md)** — a specification by Denis Yermakou, defining the kernel-level state machine that mediates user permission for `IntentObservation` flow in a conformant AxonOS deployment.
-2. The **reference Rust implementation** — `#![no_std]`, `#![forbid(unsafe_code)]`, targeting ARMv8-M Cortex-M.
-3. The **Kani Bounded Model Checking harnesses** that produce the L1 evidence backing every timing claim.
-4. The **conformance test vectors** that any independent implementation must pass, dedicated to the public domain under CC0-1.0.
-
-This is a **standalone subsystem of the AxonOS Project**. No external co-authors. No external coupling-protocol dependencies. The specification is downstream of the [AxonOS Standard](https://github.com/AxonOS-org/axonos-standard) §6.
+> [!IMPORTANT]
+> **0.9.0 is a security release.** Up to and including 0.8.0, the signature check was a 4-byte tag computed from the *public* trusted-path key, so anyone who knew that key could forge a withdrawal, a suspension or a resumption. 0.9.0 verifies a full Ed25519 signature on every frame and refuses every replay. Upgrade, and read [AXC-2026-001](./docs/advisories/AXC-2026-001.md).
 
 ---
 
-## The consent state machine
+## Why it exists
 
-```
-       ┌───────────┐
-       │  Granted  │◄────────────┐
-       └─────┬─────┘             │
-             │                   │
-   user pause│  user resume      │
-             ▼                   │
-       ┌───────────┐             │
-       │ Suspended │─────────────┘
-       └─────┬─────┘
-             │
-   user revoke (also from Granted)
-             ▼
-       ┌───────────┐
-       │ Withdrawn │  (terminal — requires new manifest install)
-       └───────────┘
-```
+A brain–computer interface reads signals the person producing them cannot hide. Consent to that reading cannot be a setting an application chooses to honour; it has to be a fact the kernel enforces before any observation leaves it. `axonos-consent` is that enforcement point in [AxonOS](https://axonos.org): a three-state machine — `Granted`, `Suspended`, `Withdrawn` — driven only by signed decisions from the trusted path, and a publication gate that every observation must pass.
 
-`Withdrawn` is terminal. The only path back is a fresh manifest install through the trusted path. **This non-reversibility is the central anti-coercion property.**
+## Four guarantees
 
----
+| | Guarantee | Established by |
+|:--:|:--|:--|
+| **1** | **Nothing changes without a signature.** A frame becomes a decision only after its Ed25519 signature verifies under the key of the party it names. Knowing the public key is worth nothing. | Kani proof, a test that flips each of the 768 bits of a frame, a forgery fuzzer |
+| **2** | **Nothing is admitted twice.** Every frame carries a sequence number that must exceed the last one consumed from its signer, and the counter survives a power cycle. | Kani proof, tests |
+| **3** | **Withdrawal is final.** `Withdrawn` is absorbing in the state machine and in the gate, and a corrupted state byte reads as `Withdrawn`, never as `Granted`. | Three Kani proofs |
+| **4** | **Withdrawal is immediate.** Consent and the publication count share one atomic word; once a withdrawal is stored, no observation can be committed. | loom, every interleaving; a 200-round test on real threads |
 
-## Performance envelope (reference hardware: STM32F407 @ 168 MHz)
+## How a decision is admitted
 
-> **Correction, published 2026-08-16.** Until this revision the ≤ 1648 cycle
-> bound was tagged `L1 (Kani-proven)` here, in `SPEC.md` §4.1 and in the
-> `handle_event()` doc comment, and SPEC §4.1 named
-> `handle_withdraw_terminates` as the harness backing it. That harness proves
-> termination and target-state correctness; it contains no cycle assertion,
-> and Kani cannot produce one. The cycle figure is an analytical bound derived
-> by instruction counting, and is now tagged as such. Separately, the harness
-> exercises the `Granted` starting state only, although its doc comment said
-> "any starting state" — corrected, and the coverage gap is recorded as open.
-> Nothing about the measured L2 figures below changes. Per the AxonOS
-> Standard, this notice is permanent.
-
-| Property | Value | Evidence level |
-|:---|---:|:---:|
-| Cycles per transition (upper bound) | **≤ 1648** | analytical — instruction-count derived, derivation pending |
-| Wall-clock per transition (upper bound) | **≤ 9.8 µs** | analytical — the cycle bound at 168 MHz |
-| Transition terminates, target state correct | proven | **L1** — Kani `handle_withdraw_terminates` |
-| End-to-end withdrawal → stream termination | **≤ 10 ms** | composed, see SPEC §4.2 |
-| Median (measured, 18-h soak, 12 × 10⁶ events) | 1098 cycles · ≈ 6.5 µs | L2 |
-| 99.9th percentile (measured) | 1487 cycles · ≈ 8.85 µs | L2 |
-| Worst observed (measured) | 1503 cycles · ≈ 8.95 µs | L2 |
-| Soak duration with zero unsafe states | 18 h / 12 × 10⁶ events | L2 |
-| Critical-path allocations | 0 | static analysis |
-| Source lines (`src/`) | 594 | — |
-| Unsafe blocks | 0 | `#![forbid(unsafe_code)]` |
-| Kani harnesses | 5 | passing in CI |
-
-All measurements remain within the L1 bound. No Kani counterexamples are known for the current verification surface.
-
----
-
-## Continuous integration
-
-Every push and pull-request runs the full CI matrix in [.github/workflows/ci.yml](./.github/workflows/ci.yml). The eight CI jobs:
-
-| Job | What it checks | Blocking |
-|:---|:---|:---:|
-| `Format (rustfmt)` | `cargo fmt --all --check` — source is `cargo fmt`-clean | ✅ |
-| `Lint (clippy)` | `cargo clippy --all-features --all-targets` — no lint errors | ✅ |
-| `Test (ubuntu, stable)` | `cargo test` with both `--all-features` and `--no-default-features` | ✅ |
-| `Build no_std (Cortex-M4F)` | `cargo build --target thumbv7em-none-eabihf --no-default-features --release` | ✅ |
-| `Documentation (rustdoc)` | `cargo doc --no-deps` with `RUSTDOCFLAGS=-D warnings` (no broken intra-doc links) | ✅ |
-| `License files & SPDX` | All five LICENSE files present with correct SPDX identifiers | ✅ |
-| `Fuzz (build + 60s smoke)` | Builds the three `cargo-fuzz` targets and smoke-runs each for 60 s on nightly | ✅ |
-| `CI` (aggregate) | Green check iff every job above passed | ✅ |
-
-A red X on any job blocks the merge. The aggregate `CI` job is what the branch-protection rule watches.
-
----
-
-## Repository layout
-
-```
-axonos-consent/
-├── SPEC.md                  ← canonical specification (this is the source of truth)
-├── README.md                ← this file
-├── CHANGELOG.md             ← version history (see the releases page for the current release)
-├── Cargo.toml               ← crate manifest; MSRV 1.75
-├── LICENSE                  ← Apache-2.0 OR MIT dispatcher for code
-├── LICENSE-APACHE           ← Apache-2.0 full text
-├── LICENSE-MIT              ← MIT full text
-├── LICENSE-CC-BY-SA         ← CC-BY-SA-4.0 full text for the specification
-├── rustfmt.toml             ← formatting configuration
-├── rust-toolchain.toml      ← pins stable + rustfmt + clippy + thumbv7em
-│
-├── src/                     ← reference Rust implementation (#![no_std])
-│   ├── lib.rs               ← crate root, exports, doctest
-│   ├── state.rs             ← consent FSM with AtomicU8
-│   ├── wire.rs              ← 16-byte little-endian wire format
-│   ├── crypto.rs            ← constant-time signature verification
-│   ├── error.rs             ← typed error taxonomy
-│   ├── interlock.rs         ← ObservationGate trait for kernel IPC integration
-│   └── dual_control.rs      ← multi-party (guardian) co-authorisation (v0.5.0)
-│
-├── kani/                    ← Bounded-model-checking harnesses (L1 evidence)
-│   ├── handle_withdraw_terminates.rs
-│   ├── fsm_no_invalid_transitions.rs
-│   ├── cbor_decoder_bounded.rs
-│   ├── signature_verification_constant_time.rs
-│   └── co_authorisation_requires_two_parties.rs
-│
-├── tests/                   ← unit + integration + property tests
-│   ├── integration.rs       ← full FSM lifecycle
-│   └── wire_format.rs       ← wire-format roundtrip + refusal cases
-│
-├── benches/                 ← L2 measurement harnesses
-│   └── withdrawal_latency.rs
-│
-├── examples/                ← worked usage examples
-│   ├── basic_usage.rs       ← (requires the `std` feature)
-│   └── dual_control.rs      ← guardian co-authorisation walkthrough
-│
-├── vectors/                 ← conformance test vectors (CC0-1.0; public domain)
-│   ├── README.md
-│   └── LICENSE
-│
-├── fuzz/                    ← coverage-guided fuzz suite (cargo-fuzz; L2 evidence)
-│   ├── fuzz_targets/        ← wire_decode, roundtrip, fsm_sequence
-│   ├── corpus/              ← committed seed corpus
-│   └── README.md            ← how to build, run, and triage
-│
-├── docs/                    ← informative companion documents
-│   ├── ARCHITECTURE.md
-│   ├── SECURITY-MODEL.md
-│   ├── DESIGN-RATIONALE.md
-│   └── citation.bib
-│
-└── .github/workflows/
-    └── ci.yml               ← 8-job CI: fmt, clippy, test, no_std build, docs, license, fuzz, aggregate
+```text
+ frame — 96 bytes from the trusted path
+   │
+   ├─ 1  wire      exactly 96 bytes · magic AXC2 · canonical record      refused → 0x07
+   ├─ 2  auth      strict Ed25519 under the key of the party it names    refused → 0x08
+   ├─ 3  sequence  greater than the last consumed from that party        refused → 0x08
+   ├─ 4  fsm       admissible from the current state                     refused → 0xFF
+   │
+   ▼
+ gate — one AtomicU32: consent state + publication count
+   ▲
+   └─ try_publish() — the IPC producer commits every observation through it
 ```
 
----
+Every layer has one job and one proof, and the order is normative ([SPEC §7.6](./SPEC.md#76-order-of-checks)): two implementations refuse the same frame for the same reason.
 
 ## Quick start
 
-Add to your `Cargo.toml`:
-
 ```toml
 [dependencies]
-axonos-consent = "0.4"
+axonos-consent = { git = "https://github.com/AxonOS-org/axonos-consent", tag = "v0.9.0" }
 ```
-
-Use:
 
 ```rust
-use axonos_consent::{ConsentMachine, ConsentState};
+use axonos_consent::{ConsentMachine, Ed25519Strict};
 
-let manifest_id: u16 = 1;
-let trusted_path_pubkey = [0u8; 32];  // Ed25519 public key
-let machine = ConsentMachine::new(manifest_id, trusted_path_pubkey);
-assert_eq!(machine.state(), ConsentState::Granted);
+// The kernel holds only the trusted path's public key.
+let mut consent = ConsentMachine::new(manifest_id, trusted_path_public_key, Ed25519Strict)?;
+
+// Trusted path → kernel: one signed 96-byte frame.
+match consent.handle(&frame) {
+    Ok(_state) => storage.write(consent.persisted()), // persist before acknowledging
+    Err(refusal) => audit.record(refusal.to_abi_code()),
+}
+
+// IPC producer: write the slot, then commit it through the gate.
+ring.write(consent.gate().published(), observation);
+if let Err(suppressed) = consent.gate().try_publish() {
+    sdk.deliver(suppressed.abi_code()); // 0x05 suspended · 0x06 withdrawn
+}
 ```
 
-A worked example covering the full FSM lifecycle is in [`examples/basic_usage.rs`](./examples/basic_usage.rs).
+Runnable versions: [`basic_usage`](./examples/basic_usage.rs), [`dual_control`](./examples/dual_control.rs) and [`publication_gate`](./examples/publication_gate.rs), which races a producer thread against a withdrawal.
 
----
+| Feature | Default | What it does |
+|:--|:--:|:--|
+| `ed25519` | ✓ | The reference verifier, `Ed25519Strict`, on `ed25519-dalek` |
+| `ed25519-fast` | | Precomputed tables: faster verification for tens of KiB of flash |
+| `std` | | `std::error::Error` for `ConsentError` |
 
-## Verifying the L1 claims
+Without `ed25519`, bring your own [`SignatureVerifier`](./src/auth.rs) — a secure element, for instance. The crate then has no dependencies at all.
 
-```sh
-# Install Kani once
-cargo install --locked kani-verifier
-cargo kani setup
+## The wire format
 
-# Run all five harnesses
-cargo kani --harness handle_withdraw_terminates
-cargo kani --harness fsm_no_invalid_transitions
-cargo kani --harness cbor_decoder_bounded
-cargo kani --harness signature_verification_constant_time
+```text
+ offset  size  field          
+      0     4  magic          "AXC2" — protocol and version; the domain separator
+      4     1  state          0x01 Granted · 0x02 Suspended · 0x03 Withdrawn
+      5     1  flags          bit 0 terminal · bit 1 from-secure-world · bit 3 guardian
+      6     2  manifest_id    u16 LE
+      8     8  sequence       u64 LE · strictly increasing per signer
+     16     8  timestamp_us   u64 LE · the signer's clock · informational only
+     24     8  reserved       zero
+     32    64  signature      Ed25519 (RFC 8032) over bytes 0..32
 ```
 
-Each harness prints `VERIFICATION SUCCESSFUL` on a passing run. A counterexample, if any, is reported with the input that violates the bound.
+The terminal flag must agree with the state, the role is signed, and the signer's clock decides nothing. The full rules are in [SPEC §6](./SPEC.md#6-wire-format).
 
----
+## Dual control
 
-## Fuzz and differential testing
+For clinical deployments a guardian holds a second key. Either party can stop the flow alone; only both can resume it, within a window measured on the kernel's clock. The role travels inside the signed record, so a frame cannot be relabelled, and a machine refuses to be built with one key for both parties.
 
-Alongside the L1 Kani harnesses, the reference implementation carries a
-coverage-guided fuzz suite in [`fuzz/`](./fuzz/), built on `cargo-fuzz` /
-libFuzzer. Three targets search the unbounded input space for a
-specification or implementation defect:
-
-| Target | Surface | Property |
-|:---|:---|:---|
-| `wire_decode` | §6 wire-format decoder | totality — never panics on any byte buffer |
-| `roundtrip` | §6 encode/decode | canonical encoding — no two buffers denote one event |
-| `fsm_sequence` | §2–§3 state machine | FSM invariants under arbitrary signed-event streams |
-
-```sh
-cargo install cargo-fuzz --locked
-cargo +nightly fuzz run wire_decode      # or roundtrip, fsm_sequence
+```rust
+let mut consent = DualControlMachine::new(manifest_id, patient_key, guardian_key, Ed25519Strict)?;
+consent.propose(&frame, kernel_monotonic_us)?; // Applied(state) or PendingCoAuth(state)
 ```
 
-The Kani harnesses are L1 evidence (exhaustive proof over a bounded space);
-fuzzing is L2-class evidence (a large, coverage-guided sample of the unbounded
-space). CI builds all three targets and smoke-runs each for 60 s on every
-change. See [`fuzz/README.md`](./fuzz/README.md) and SPEC §10.3.
+## Evidence
 
----
+| Property | Evidence | Reproduce |
+|:--|:--|:--|
+| Decoding is total and canonical | Kani · fuzz `frame_decode` | `cargo kani --no-default-features` |
+| No transition without authentication | Kani · 768-bit flip test · fuzz `auth_forgery` | `cargo test` |
+| No sequence admitted twice, across a power cycle | Kani · tests | `cargo test` |
+| `Withdrawn` is absorbing; corruption fails closed | Kani ×3 · exhaustive unit test | `cargo kani --no-default-features` |
+| No publication after a withdrawal returns | loom, three models · real-thread test | `RUSTFLAGS="--cfg loom" cargo test --release --lib loom` |
+| One party can stop, only two can resume | Kani ×2 · ten tests | `cargo test --test dual_control` |
+| Strict Ed25519, malleability refused | 20 conformance vectors, RFC 8032 keys | `cargo run --example gen_vectors --features std -- --check` |
 
-## Conformance against the specification
+Every row runs in [CI](./.github/workflows/ci.yml) on every change, inside the aggregate gate that every merge must pass.
 
-Independent implementations can run the conformance vectors:
+**What is not claimed.** No cycle or wall-clock bound: earlier releases published a cycle figure for a path that no longer exists, and a new one will appear only with its derivation and an on-device measurement. The correctness of Ed25519 itself is taken from `ed25519-dalek`, not proven here. Verification handles only public data; signing and its side channels belong to the trusted path. Key provisioning, secure boot and authenticated storage are the integrator's, as [SPEC §8](./SPEC.md#8-storage-and-persistence) and [§11](./SPEC.md#11-threat-model) set out. The fuzz jobs run a 60-second campaign per target: a regression net, not a search.
 
-```sh
-cargo test --test conformance_vectors
-```
+## Conformance
 
-For implementations in languages other than Rust, the vectors are exported in canonical binary form at [`vectors/`](./vectors/) under CC0-1.0; replay with any wire-format-aware driver.
+The twenty vectors in [`vectors/`](./vectors/) are the specification made executable: a frame, the state and sequence it meets, and the exact outcome — new state, or the refusal and its ABI code. They are signed with the RFC 8032 test keys, dedicated to the public domain, and checked byte for byte against the generator on every change. An implementation in any language conforms by producing every documented outcome.
 
----
+## Integrating it
+
+- **Persist before acknowledging.** Write `persisted()` — the state and the last sequence from each signer — atomically, after each admitted frame. A lost sequence number re-opens every old frame to replay.
+- **Sign with fresh sequences.** The trusted path keeps its own counter, strictly increasing and itself persisted.
+- **Give dual control the kernel's clock.** `now_us` comes from the monotonic clock, never from a frame.
+- **Size the ring as a power of two,** at most 2^29 slots; the gate's count wraps at 2^30.
+- **Bringing your own verifier?** Implement strict RFC 8032 verification, and refuse small-order keys in `accepts_key`.
 
 ## Versioning
 
-The crate is published as `0.y.z`: the implementation surface is not yet locked, and a `v1.0.0` release will accompany the second independent implementation. For the current release and its notes, see the [releases page](https://github.com/AxonOS-org/axonos-consent/releases) and [CHANGELOG.md](./CHANGELOG.md).
+| | Version | Source of truth |
+|:--|:--|:--|
+| Crate | **0.9.0** | `Cargo.toml` |
+| Specification | **0.6.0** | `SPEC.md`, `SPEC_VERSION` |
+| Wire format | **2** (`AXC2`) | `src/wire.rs`, SPEC §6 |
 
-The single-party **specification protocol** is stable as of v0.3.0 and unchanged since: v0.4.0 recorded added validation evidence (SPEC §10.3) and v0.5.0 added the optional multi-party (guardian) co-authorisation profile (SPEC §12) without altering the single-party baseline. The 0.6 and 0.7 releases are implementation, licensing, and CI changes only — they do not touch the wire protocol. An implementation conformant with the v0.4.0 protocol is conformant with the current baseline profile without modification.
+[`tools/check.py`](./tools/check.py) fails the build if any of them disagree, or if a badge on this page stops telling the truth. 0.9.0 is breaking by necessity: wire v1 could not carry a signature.
 
----
+## Repository
 
-## Multi-party (guardian) co-authorisation (v0.5.0)
+```text
+src/            wire · auth · state · machine · gate · dual_control · proofs (Kani)
+tests/          the boundary under attack · dual control · real threads · vectors
+vectors/        twenty conformance vectors, CC0
+fuzz/           frame_decode · fsm_sequence · auth_forgery
+examples/       basic_usage · dual_control · publication_gate · gen_vectors
+docs/           architecture · security model · design rationale · advisories
+SPEC.md         the AxonOS Consent Specification, CC-BY-SA-4.0
+```
 
-For clinical deployments — the ALS rehabilitation pilot in the canonical
-Standard's roadmap is the motivating case — a guardian can co-authorise consent
-changes together with the patient. This is the optional [`dual_control`](./src/dual_control.rs)
-layer, specified normatively in [SPEC §12](./SPEC.md#12-multi-party-guardian-co-authorisation).
+## In the AxonOS stack
 
-It follows the **safe-direction principle**:
+| Repository | Role |
+|:--|:--|
+| [axonos-standard](https://github.com/AxonOS-org/axonos-standard) | The canonical Standard; consent and the trusted path are its Sections 15 and 16 |
+| [axonos-kernel](https://github.com/AxonOS-org/axonos-kernel) | The real-time kernel whose IPC producer commits through the gate |
+| [axonos-sdk](https://github.com/AxonOS-org/axonos-sdk) | Delivers `0x05` and `0x06` to applications |
+| [axonos-conformance](https://github.com/AxonOS-org/axonos-conformance) | Conformance vectors across the RFCs |
+| [AxonOS Radar](https://axonos-bci.github.io/axonos-community-radar/) | A living map of open neurotech, scored from public evidence |
 
-- **Either party** may reduce neural-data exposure (`Suspended`, `Withdrawn`)
-  **unilaterally**. The flow can always be stopped by one signature.
-- **Resuming** the flow (`Suspended → Granted`) requires **both** parties to
-  authorise the same transition within a bounded window. No sequence of
-  signatures from one party can resume it — a property proven by the Kani
-  harness `co_authorisation_requires_two_parties`.
+## Acknowledgements
 
-The single-party `ConsentMachine` is unchanged; multi-party is opt-in by using
-`DualControlMachine` instead. See [`examples/dual_control.rs`](./examples/dual_control.rs).
+Ed25519 comes from [`ed25519-dalek`](https://github.com/dalek-cryptography/curve25519-dalek) and `curve25519-dalek` by the dalek-cryptography contributors (BSD-3-Clause). The test keys are those of [RFC 8032](https://www.rfc-editor.org/rfc/rfc8032) §7.1 (Josefsson and Liusvaara, IETF, 2017). The proofs run on the [Kani Rust Verifier](https://github.com/model-checking/kani), and the concurrency models on [loom](https://github.com/tokio-rs/loom) from the Tokio project. The defects fixed in 0.9.0 were found in an independent review of 0.8.0.
 
----
+## Licence and citation
 
-## Position in the AxonOS stack
-
-| Layer | Repository | Role |
-|---|---|---|
-| Canonical standard | [`axonos-standard`](https://github.com/AxonOS-org/axonos-standard) | Architecture manual, conformance criteria, validation taxonomy |
-| Engineering RFCs | [`axonos-rfcs`](https://github.com/AxonOS-org/axonos-rfcs) | Numbered design proposals; normative once finalised |
-| Kernel substrate | [`axonos-kernel`](https://github.com/AxonOS-org/axonos-kernel) | EDF scheduling, SPSC IPC, capability gate, monotonic time |
-| Application boundary | [`axonos-sdk`](https://github.com/AxonOS-org/axonos-sdk) | Typed intents, manifests, ABI-compatible integration |
-| **Consent layer** | **`axonos-consent`** | Deterministic consent FSM + optional multi-party co-authorisation (this repository) |
-| Consent protocol | [`axonos-protocol`](https://github.com/AxonOS-org/axonos-protocol) | Network-level consent protocol; bounded CBOR frames, exhaustive state machine |
-| Conformance | [`axonos-conformance`](https://github.com/AxonOS-org/axonos-conformance) | Byte-exact RFC-0005 / RFC-0006 vectors across Rust, Python, C, JavaScript, Java |
-| Validation | [`axonos-validation`](https://github.com/AxonOS-org/axonos-validation) | Raw measurement traces and reproducible post-processing |
-| Mesh coordination | [`axonos-swarm`](https://github.com/AxonOS-org/axonos-swarm) | Distributed timing, co-availability, peer health monitoring |
-| Acquisition gateway | [`axon-bci-gateway`](https://github.com/AxonOS-org/axon-bci-gateway) | OpenBCI GUI integration fork for EEG input |
-
----
-
-## Contributing
-
-Contributions are welcome under a high bar appropriate to safety-relevant
-infrastructure. See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the development
-environment, the local gate, the evidence discipline, and the cognitive-data
-rule, and [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md). Report vulnerabilities
-privately per [`SECURITY.md`](./SECURITY.md) — never in a public issue.
-
-## Authorship
-
-This repository is authored by **Denis Yermakou** — The AxonOS Project.
-
-- Specification text: [SPEC.md](./SPEC.md) — Denis Yermakou.
-- Reference implementation: same author, same project.
-- No external co-authors. No external coupling-protocol dependencies.
-
-Inquiries: [connect@axonos.org](mailto:connect@axonos.org) · Security: [security@axonos.org](mailto:security@axonos.org).
-
----
-
-## Licensing
-
-| Surface | License |
-|:---|:---|
-| Source code (`src/`, `tests/`, `benches/`, `examples/`) | [**Apache-2.0 OR MIT**](./LICENSE) at your option |
-| Specification text (`SPEC.md`, `docs/`, `README.md`) | [**CC-BY-SA-4.0**](./LICENSE-CC-BY-SA) |
-| Conformance test vectors (`vectors/`) | [**CC0-1.0**](./vectors/LICENSE) — public domain dedication |
-
-The test vectors are CC0 specifically so any independent implementation — in any language, under any license, commercial or otherwise — can use them without compatibility concerns.
+Code under [Apache-2.0](./LICENSE-APACHE) or [MIT](./LICENSE-MIT), at your option. The specification text under [CC-BY-SA-4.0](./LICENSE-CC-BY-SA). The conformance vectors dedicated to the public domain under [CC0-1.0](./vectors/LICENSE). Why the licence files are arranged as they are: [LICENSING.md](./LICENSING.md). To cite this work, use [CITATION.cff](./CITATION.cff) — GitHub's *Cite this repository* reads it.
 
 ---
 
 <div align="center">
 
-**axonos-consent · multi-party co-authorisation**
+**The AxonOS Project** · [axonos.org](https://axonos.org) · [connect@axonos.org](mailto:connect@axonos.org) · [security@axonos.org](mailto:security@axonos.org)<br>
+[github.com/AxonOS-org](https://github.com/AxonOS-org) · [AxonOS Radar](https://axonos-bci.github.io/axonos-community-radar/)
+
+<sub>© 2026 Denis Yermakou · `axonos-consent`</sub>
 
 </div>

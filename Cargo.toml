@@ -1,17 +1,17 @@
 [package]
 name = "axonos-consent"
-version = "0.8.0"
+version = "0.9.0"
 edition = "2021"
-rust-version = "1.75"
+rust-version = "1.85"
 authors = ["Denis Yermakou <connect@axonos.org>"]
-description = "Protocol-level consent enforcement for AxonOS — kernel-level state machine with optional multi-party (guardian) co-authorisation, formally bounded, no_std."
-documentation = "https://docs.rs/axonos-consent"
+description = "Consent enforcement for brain–computer interfaces: an authenticated, replay-protected consent state machine with a linearizable publication gate. no_std."
+documentation = "https://github.com/AxonOS-org/axonos-consent#readme"
 repository = "https://github.com/AxonOS-org/axonos-consent"
 homepage = "https://axonos.org"
 license = "Apache-2.0 OR MIT"
 readme = "README.md"
-keywords = ["bci", "consent", "real-time", "no-std", "embedded"]
-categories = ["embedded", "no-std", "cryptography", "data-structures"]
+keywords = ["bci", "consent", "ed25519", "no-std", "embedded"]
+categories = ["embedded", "no-std", "cryptography"]
 include = [
     "src/**/*",
     "Cargo.toml",
@@ -29,11 +29,27 @@ name = "axonos_consent"
 path = "src/lib.rs"
 
 [features]
-default = []
+default = ["ed25519"]
+# Hosted conveniences: std::error::Error for ConsentError.
 std = []
+# The reference signature verifier: Ed25519 (RFC 8032) with strict verification.
+# Without it, the integrator supplies a SignatureVerifier (for example a secure element).
+ed25519 = ["dep:ed25519-dalek"]
+# Precomputed tables: faster verification, at a cost of tens of KiB of flash.
+ed25519-fast = ["ed25519", "ed25519-dalek/fast"]
 
 [dependencies]
-# All dependencies are no_std-compatible; the crate carries no external dependencies.
+ed25519-dalek = { version = "3.0.0", default-features = false, optional = true }
+
+[dev-dependencies]
+ed25519-dalek = { version = "3.0.0" }
+
+[target.'cfg(loom)'.dev-dependencies]
+loom = "0.7"
+
+[lints.rust]
+unsafe_code = "forbid"
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(loom)", "cfg(kani)"] }
 
 [profile.release]
 codegen-units = 1
@@ -50,13 +66,21 @@ overflow-checks = true
 
 [[example]]
 name = "basic_usage"
-required-features = ["std"]
+required-features = ["std", "ed25519"]
 
 [[example]]
 name = "dual_control"
+required-features = ["std", "ed25519"]
+
+[[example]]
+name = "publication_gate"
 required-features = ["std"]
+
+[[example]]
+name = "gen_vectors"
+required-features = ["std", "ed25519"]
 
 [[bench]]
 name = "withdrawal_latency"
 harness = false
-required-features = ["std"]
+required-features = ["std", "ed25519"]

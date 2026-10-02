@@ -5,3 +5,6 @@ Cargo.lock
 .idea/
 *.swp
 .DS_Store
+fuzz/target
+fuzz/artifacts
+fuzz/coverage

@@ -1,58 +1,88 @@
-//! Typed error taxonomy for the consent subsystem.
-//!
-//! Each variant maps to one error code at the kernel/SDK boundary per SPEC §10.
-//! No variant carries dynamic data — this keeps the type `Copy` and ensures
-//! zero allocation on the critical path.
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+// SPDX-FileCopyrightText: 2026 Denis Yermakou <connect@axonos.org>
 
-/// Errors that can occur during consent event processing.
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+//! Typed refusals.
+//!
+//! Every way a frame can be refused has its own variant, and none carries
+//! dynamic data, so the type is `Copy` and refusing never allocates. The order
+//! in which the checks run is normative (SPEC §7.6): a frame is refused for the
+//! first rule it breaks, so two implementations refuse the same frame for the
+//! same reason.
+
+/// Why a frame, a key or a configuration was refused.
+#[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
 pub enum ConsentError {
-    /// Wire-format input was not exactly 16 bytes (SPEC §6).
+    /// The frame is not exactly [`FRAME_LEN`](crate::wire::FRAME_LEN) bytes (SPEC §6.1).
     WireFormatLength,
-    /// Reserved bit set in the flags byte (SPEC §6.2).
-    ReservedFlagBit,
-    /// State byte was not one of the three known discriminants (SPEC §2.1).
+    /// The record does not begin with the `AXC2` magic (SPEC §6.1).
+    BadMagic,
+    /// The state byte is not one of the three discriminants (SPEC §2.1).
     ReservedDiscriminant,
-    /// Signature verification failed (SPEC §7).
+    /// A reserved bit is set in the flags byte (SPEC §6.2).
+    ReservedFlagBit,
+    /// The terminal flag disagrees with the state: it must be set exactly when
+    /// the state is `Withdrawn` (SPEC §6.2).
+    TerminalFlagMismatch,
+    /// A reserved byte of the record is not zero (SPEC §6.1).
+    ReservedFieldNonZero,
+    /// The signature does not verify under the signer's key, or names a signer
+    /// this machine has no key for (SPEC §7).
     SignatureInvalid,
-    /// Event manifest ID does not match this machine's manifest ID.
+    /// The sequence number is not greater than the last one consumed from this
+    /// signer (SPEC §7.5).
+    Replay,
+    /// The record names another manifest installation (SPEC §7.6).
     ManifestMismatch,
-    /// Transition from current state to target state is not admissible (SPEC §3.2).
+    /// The transition from the current state is not admissible (SPEC §3.2).
     InadmissibleTransition,
-    /// CBOR decoder bound violation (depth or length).
-    CborBoundViolation,
+    /// A public key was refused as a trust anchor: not a valid point, or of
+    /// small order (SPEC §7.4).
+    KeyInvalid,
+    /// The machine was configured in a way the specification forbids, such as
+    /// the same key for patient and guardian, or a zero co-authorisation window
+    /// (SPEC §12.2, §12.4).
+    ConfigurationInvalid,
 }
 
 impl core::fmt::Display for ConsentError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        match self {
-            Self::WireFormatLength => f.write_str("wire-format length not exactly 16 bytes"),
-            Self::ReservedFlagBit => f.write_str("reserved flag bit set"),
-            Self::ReservedDiscriminant => f.write_str("reserved state discriminant"),
-            Self::SignatureInvalid => f.write_str("signature verification failed"),
-            Self::ManifestMismatch => f.write_str("event manifest ID does not match"),
-            Self::InadmissibleTransition => f.write_str("inadmissible transition"),
-            Self::CborBoundViolation => f.write_str("CBOR depth or length bound violation"),
-        }
+        f.write_str(match self {
+            Self::WireFormatLength => "frame is not exactly 96 bytes",
+            Self::BadMagic => "record does not begin with the AXC2 magic",
+            Self::ReservedDiscriminant => "reserved state discriminant",
+            Self::ReservedFlagBit => "reserved flag bit set",
+            Self::TerminalFlagMismatch => "terminal flag disagrees with the state",
+            Self::ReservedFieldNonZero => "reserved field is not zero",
+            Self::SignatureInvalid => "signature does not verify",
+            Self::Replay => "sequence number already consumed",
+            Self::ManifestMismatch => "record names another manifest",
+            Self::InadmissibleTransition => "inadmissible transition",
+            Self::KeyInvalid => "public key refused as a trust anchor",
+            Self::ConfigurationInvalid => "configuration forbidden by the specification",
+        })
     }
 }
 
 #[cfg(feature = "std")]
 impl std::error::Error for ConsentError {}
 
-/// Convert to the kernel/SDK boundary error code per AxonOS Standard §7.4.
 impl ConsentError {
-    /// Map to the byte-level error code transmitted at the kernel ABI boundary.
-    pub fn to_abi_code(&self) -> u8 {
+    /// The byte transmitted at the kernel/SDK boundary (AxonOS Standard, Section 20).
+    ///
+    /// Shape refusals map to `0x07`, authentication refusals (including replay)
+    /// to `0x08`, and refusals that should never reach an application to `0xFF`.
+    pub const fn to_abi_code(&self) -> u8 {
         match self {
-            // 0x07 ReservedFieldNonZero — for both reserved-bit and reserved-discriminant
-            Self::ReservedFlagBit | Self::ReservedDiscriminant => 0x07,
-            // 0x08 SignatureInvalid
-            Self::SignatureInvalid => 0x08,
-            // 0xFF InternalError — for transitions that should not have reached the SDK
-            Self::ManifestMismatch | Self::InadmissibleTransition => 0xFF,
-            // 0x07 — wire-format-shape errors
-            Self::WireFormatLength | Self::CborBoundViolation => 0x07,
+            Self::WireFormatLength
+            | Self::BadMagic
+            | Self::ReservedDiscriminant
+            | Self::ReservedFlagBit
+            | Self::TerminalFlagMismatch
+            | Self::ReservedFieldNonZero => 0x07,
+            Self::SignatureInvalid | Self::Replay | Self::KeyInvalid => 0x08,
+            Self::ManifestMismatch | Self::InadmissibleTransition | Self::ConfigurationInvalid => {
+                0xFF
+            }
         }
     }
 }

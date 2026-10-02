@@ -1,86 +1,47 @@
-#![no_main]
-//! Fuzz target — the consent finite-state machine under arbitrary event streams.
-//!
-//! The fuzz input is read as `[ 32-byte key | 2-byte manifest id | sequence of
-//! target-state bytes ]`. Each sequence byte becomes a *correctly signed*
-//! `ConsentEvent`, so the signature check passes and what is exercised is the
-//! FSM transition logic itself — not the crypto path.
-//!
-//! Invariants asserted after every event:
-//!   1. `handle_event` never panics — reaching the next line proves it.
-//!   2. `state()` never panics — the stored byte is always a valid state.
-//!   3. `Withdrawn` is terminal (SPEC §3.3): once entered, never left.
-//!   4. Every *accepted* transition is admissible (SPEC §3.1).
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+// SPDX-FileCopyrightText: 2026 Denis Yermakou <connect@axonos.org>
 
+//! FSM invariants (SPEC §2, §3, §7.5, §9) under arbitrary streams of records.
+//!
+//! Authentication is deliberately out of the loop: the verifier here accepts
+//! every signature, so the fuzzer explores the state machine, the sequence
+//! rule and the gate rather than spending its time on Ed25519. The signature
+//! path has its own target, `auth_forgery`.
+
+#![no_main]
+
+use axonos_consent::wire::{BODY_LEN, FRAME_LEN, SIGNATURE_LEN};
+use axonos_consent::{ConsentMachine, ConsentState, SignatureVerifier};
 use libfuzzer_sys::fuzz_target;
-use axonos_consent::crypto::compute_tag;
-use axonos_consent::state::is_admissible_transition;
-use axonos_consent::{ConsentEvent, ConsentMachine, ConsentState};
+
+struct AcceptEverySignature;
+impl SignatureVerifier for AcceptEverySignature {
+    fn verify(&self, _: &[u8; 32], _: &[u8; BODY_LEN], _: &[u8; SIGNATURE_LEN]) -> bool {
+        true
+    }
+}
 
 fuzz_target!(|data: &[u8]| {
-    // Need key (32) + manifest id (2) + at least one event byte.
-    if data.len() < 35 {
+    let Ok(mut machine) = ConsentMachine::new(7, [0x5A; 32], AcceptEverySignature) else {
         return;
-    }
-
-    let mut key = [0u8; 32];
-    key.copy_from_slice(&data[..32]);
-    let manifest_id = u16::from_le_bytes([data[32], data[33]]);
-    let sequence = &data[34..];
-
-    let mut machine = ConsentMachine::new(manifest_id, key);
-    assert_eq!(
-        machine.state(),
-        ConsentState::Granted,
-        "initial state must be Granted (SPEC §2.2)",
-    );
-
-    let mut entered_withdrawn = false;
-
-    for (i, &raw) in sequence.iter().enumerate() {
-        // Map the fuzz byte to a discriminant in 0..=3. 0 is the reserved
-        // (invalid) discriminant — included deliberately so the decoder path
-        // inside handle_event is exercised alongside the valid transitions.
-        let state_byte = raw % 4;
-
-        let mut event = ConsentEvent {
-            state: state_byte,
-            flags: 0,
-            manifest_id,
-            timestamp_us: i as u64,
-            sig_truncated: 0,
-        };
-        // Sign correctly — the FSM is the subject here, not the signature path.
-        event.sig_truncated = compute_tag(&event, &key);
-
-        let before = machine.state();             // invariant 2
-        let result = machine.handle_event(event); // invariant 1
-        let after = machine.state();              // invariant 2
-
-        // Invariant 3 — terminality of Withdrawn.
-        if before == ConsentState::Withdrawn {
-            assert_eq!(
-                after, ConsentState::Withdrawn,
-                "terminal violated: left the Withdrawn state",
-            );
+    };
+    let mut withdrawn = false;
+    for body in data.chunks_exact(BODY_LEN) {
+        let mut frame = [0u8; FRAME_LEN];
+        frame[..BODY_LEN].copy_from_slice(body);
+        let before_sequence = machine.last_sequence();
+        let before_published = machine.gate().published();
+        let granted = machine.state() == ConsentState::Granted;
+        let published = machine.gate().try_publish();
+        assert_eq!(published.is_ok(), granted);
+        if published.is_err() {
+            assert_eq!(machine.gate().published(), before_published);
         }
-        if after == ConsentState::Withdrawn {
-            entered_withdrawn = true;
+        let _ = machine.handle(&frame);
+        assert!(machine.last_sequence() >= before_sequence);
+        if withdrawn {
+            assert_eq!(machine.state(), ConsentState::Withdrawn);
         }
-        if entered_withdrawn {
-            assert_eq!(
-                after, ConsentState::Withdrawn,
-                "terminal violated: re-entered an active state after Withdrawn",
-            );
-        }
-
-        // Invariant 4 — an accepted transition is always admissible.
-        if let Ok(reached) = result {
-            assert_eq!(after, reached, "state() disagrees with handle_event() result");
-            assert!(
-                is_admissible_transition(before, reached),
-                "inadmissible transition was accepted: {before:?} -> {reached:?}",
-            );
-        }
+        withdrawn = machine.state() == ConsentState::Withdrawn;
     }
 });

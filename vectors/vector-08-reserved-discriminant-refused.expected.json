@@ -1,11 +1,15 @@
 {
-  "description": "Decode failure: reserved state discriminant 0x00.",
-  "layer": "decode",
-  "from_state": null,
-  "context_manifest_id": null,
-  "input_len": 16,
-  "verdict": "refuse",
+  "vector": "vector-08-reserved-discriminant-refused",
+  "about": "state byte 0x04",
+  "profile": "single-party",
+  "wire_version": 2,
+  "manifest_id": 7,
+  "trusted_key": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+  "initial_state": "Granted",
+  "initial_sequence": 0,
+  "frame_len": 96,
+  "result": "refuse",
+  "state_after": "Granted",
   "error": "ReservedDiscriminant",
-  "error_message": "reserved state discriminant",
-  "post_state": null
+  "abi_code": "0x07"
 }
