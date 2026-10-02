@@ -10,6 +10,14 @@
 //! `true` or anything at all, so the proofs hold whatever the real verifier
 //! decides; the verifier itself (Ed25519, RFC 8032) is the one assumption,
 //! and it is tested against RFC 8032 and the conformance vectors instead.
+//!
+//! Unwind bounds. The only loops on these paths are the gate's
+//! compare-and-swap, which completes in one iteration without contention, and
+//! byte-array comparisons, which Kani's library models as loops of one
+//! iteration per byte plus one: at most 33 here, for a 32-byte key or record.
+//! Every bounded harness therefore uses 40. A bound below a loop's length stops
+//! the proof at an unwinding assertion before it reaches its property — which
+//! is what three harnesses did in 0.9.0, with a bound of 4.
 
 use crate::auth::SignatureVerifier;
 use crate::dual_control::DualControlMachine;
@@ -98,7 +106,7 @@ fn withdrawn_is_absorbing() {
 /// SPEC §7.1 — a frame whose signature does not verify changes nothing: not
 /// the state, not the sequence, not the publication count.
 #[kani::proof]
-#[kani::unwind(4)]
+#[kani::unwind(40)]
 fn no_transition_without_authentication() {
     let frame: [u8; FRAME_LEN] = kani::any();
     let persisted = Persisted {
@@ -127,7 +135,7 @@ fn no_transition_without_authentication() {
 /// SPEC §7.5 — no sequence number is admitted twice, and the consumed sequence
 /// never moves backwards.
 #[kani::proof]
-#[kani::unwind(4)]
+#[kani::unwind(40)]
 fn no_sequence_is_admitted_twice() {
     let frame: [u8; FRAME_LEN] = kani::any();
     let last: u64 = kani::any();
@@ -150,7 +158,7 @@ fn no_sequence_is_admitted_twice() {
 /// SPEC §3.3, §9 — a withdrawn machine stays withdrawn and publishes nothing,
 /// whatever frame arrives.
 #[kani::proof]
-#[kani::unwind(4)]
+#[kani::unwind(40)]
 fn withdrawn_machine_stays_withdrawn() {
     let frame: [u8; FRAME_LEN] = kani::any();
     let persisted = Persisted {
@@ -169,7 +177,7 @@ fn withdrawn_machine_stays_withdrawn() {
 /// SPEC §9.2 — the gate commits a publication only while its word reads
 /// `Granted`, and a refused publication leaves the word untouched.
 #[kani::proof]
-#[kani::unwind(4)]
+#[kani::unwind(40)]
 fn gate_publishes_only_while_granted() {
     let raw: u32 = kani::any();
     let gate = PublicationGate::from_raw(raw);
@@ -189,7 +197,7 @@ fn gate_publishes_only_while_granted() {
 /// SPEC §9.2 — once the gate holds `Withdrawn` it holds it for good, keeps its
 /// count, and refuses every publication.
 #[kani::proof]
-#[kani::unwind(4)]
+#[kani::unwind(40)]
 fn gate_withdrawal_is_absorbing() {
     let raw: u32 = kani::any();
     let gate = PublicationGate::from_raw(raw);

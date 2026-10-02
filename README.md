@@ -69,7 +69,7 @@ Every layer has one job and one proof, and the order is normative ([SPEC §7.6](
 
 ```toml
 [dependencies]
-axonos-consent = { git = "https://github.com/AxonOS-org/axonos-consent", tag = "v0.9.0" }
+axonos-consent = { git = "https://github.com/AxonOS-org/axonos-consent", tag = "v0.9.1" }
 ```
 
 ```rust
@@ -158,7 +158,7 @@ The twenty vectors in [`vectors/`](./vectors/) are the specification made execut
 
 | | Version | Source of truth |
 |:--|:--|:--|
-| Crate | **0.9.0** | `Cargo.toml` |
+| Crate | **0.9.1** | `Cargo.toml` |
 | Specification | **0.6.0** | `SPEC.md`, `SPEC_VERSION` |
 | Wire format | **2** (`AXC2`) | `src/wire.rs`, SPEC §6 |
 

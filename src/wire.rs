@@ -103,7 +103,9 @@ impl ConsentRecord {
     /// Decode and validate a record. Checks run in the order SPEC §7.6 fixes:
     /// magic, state, flags, terminal flag, reserved bytes.
     pub fn decode(body: &[u8; BODY_LEN]) -> Result<Self, ConsentError> {
-        if [body[0], body[1], body[2], body[3]] != MAGIC {
+        // One integer comparison rather than an array comparison: the decode
+        // path stays free of loops, at the machine level and in Kani's model.
+        if u32::from_le_bytes([body[0], body[1], body[2], body[3]]) != u32::from_le_bytes(MAGIC) {
             return Err(ConsentError::BadMagic);
         }
         let state = ConsentState::from_wire(body[4])?;

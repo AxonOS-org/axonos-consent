@@ -4,6 +4,26 @@ All notable changes to `axonos-consent` are documented here. Format based on [Ke
 
 ---
 
+## [0.9.1] — 2026-10-02
+
+### Fixed
+
+- **Three Kani proofs could not complete in 0.9.0's CI run.**
+  `no_transition_without_authentication`, `no_sequence_is_admitted_twice` and
+  `withdrawn_machine_stays_withdrawn` carried an unwind bound of 4. On their
+  path, decoding compared the 4-byte magic as an array, which Kani models as a
+  loop needing five unwindings, so each run stopped at an unwinding assertion
+  before it reached its property. The magic is now compared as one 32-bit
+  integer, which leaves the decode path without a single loop, and every bounded
+  harness uses 40, with the reason written beside the bounds in
+  `src/proofs.rs`. The properties are unchanged; what changes is that their
+  proofs can now finish.
+- The spelling job pins `crate-ci/typos` to v1.50.3; the `master` branch it
+  followed is deprecated.
+
+No change to behaviour, the wire format, the specification or the conformance
+vectors.
+
 ## [0.9.0] — 2026-10-02
 
 A security release, and breaking by necessity. Specification 0.6.0, wire format 2.
