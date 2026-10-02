@@ -13,6 +13,7 @@ spdx       every source file opens with the two SPDX lines
 claims     retired claims stay retired on the public surface
 badges     every number a README badge states is the number in the code
 links      every relative link and SPEC anchor in the Markdown resolves
+fuzzkey    the forgery fuzzer's key is the point derived from its label
 hygiene    no template placeholders, no private keys, no retired files
 """
 
@@ -188,6 +189,78 @@ def links() -> None:
                 fail("links", f"{p.relative_to(ROOT)} links to missing anchor {target}")
 
 
+# ── the forgery fuzzer's key: a point no one holds the secret for ────────────
+# Edwards25519 arithmetic in affine coordinates, enough to hash to a point and
+# clear the cofactor. Self-tested below against the base point and RFC 8032.
+P25519 = 2**255 - 19
+D25519 = (-121665 * pow(121666, P25519 - 2, P25519)) % P25519
+SQRT_M1 = pow(2, (P25519 - 1) // 4, P25519)
+L25519 = 2**252 + 27742317777372353535851937790883648493
+FUZZ_LABEL = b"axonos-consent/fuzz/auth_forgery: a public key whose secret no one holds"
+
+
+def ed_decompress(b: bytes):
+    y = int.from_bytes(b, "little")
+    sign, y = y >> 255, y & ((1 << 255) - 1)
+    if y >= P25519:
+        return None
+    x2 = (y * y - 1) * pow(D25519 * y * y + 1, P25519 - 2, P25519) % P25519
+    x = pow(x2, (P25519 + 3) // 8, P25519)
+    if (x * x - x2) % P25519:
+        x = x * SQRT_M1 % P25519
+    if (x * x - x2) % P25519 or (x == 0 and sign):
+        return None
+    return (P25519 - x if x & 1 != sign else x, y)
+
+
+def ed_add(a, b):
+    (x1, y1), (x2, y2) = a, b
+    t = D25519 * x1 * x2 * y1 * y2 % P25519
+    return ((x1 * y2 + x2 * y1) * pow(1 + t, P25519 - 2, P25519) % P25519,
+            (y1 * y2 + x1 * x2) * pow(1 - t, P25519 - 2, P25519) % P25519)
+
+
+def ed_mul(k: int, a):
+    r = (0, 1)
+    while k:
+        if k & 1:
+            r = ed_add(r, a)
+        a, k = ed_add(a, a), k >> 1
+    return r
+
+
+def ed_compress(a) -> bytes:
+    return (a[1] | ((a[0] & 1) << 255)).to_bytes(32, "little")
+
+
+def derive_fuzz_key() -> bytes:
+    counter = 0
+    while True:
+        h = hashlib.sha512(FUZZ_LABEL + counter.to_bytes(4, "little")).digest()[:32]
+        point = ed_decompress(h)
+        if point is not None:
+            q = ed_mul(8, point)
+            if q != (0, 1) and ed_mul(L25519, q) == (0, 1):
+                return ed_compress(q)
+        counter += 1
+
+
+def fuzzkey() -> None:
+    base = ed_decompress((4 * pow(5, P25519 - 2, P25519) % P25519).to_bytes(32, "little"))
+    rfc_test_1 = bytes.fromhex("d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a")
+    rfc_point = ed_decompress(rfc_test_1)
+    if base is None or ed_mul(L25519, base) != (0, 1) or rfc_point is None \
+            or ed_compress(rfc_point) != rfc_test_1:
+        fail("fuzzkey", "the Edwards25519 arithmetic fails its self-test")
+        return
+    key = derive_fuzz_key()
+    literal = ", ".join(f"0x{b:02x}" for b in key)
+    for path in ("fuzz/fuzz_targets/auth_forgery.rs", "tests/security.rs"):
+        text = re.sub(r"\s+", " ", read(path))
+        if literal not in text:
+            fail("fuzzkey", f"{path} does not hold the derived key {key.hex()}")
+
+
 def hygiene() -> None:
     patterns = [r"Use this section to tell people", r"\bTODO\b", r"\bTBD\b", r"(?i)lorem ipsum",
                 r"BEGIN (OPENSSH |EC |RSA )?PRIVATE KEY"]
@@ -212,6 +285,7 @@ def main() -> int:
     claims()
     badges(count)
     links()
+    fuzzkey()
     hygiene()
     if FAILURES:
         print("\n".join(FAILURES))

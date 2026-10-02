@@ -316,7 +316,7 @@ The [`vectors/`](./vectors/) directory holds twenty vectors, each a frame and th
 
 ### 10.3 Fuzzing (informative)
 
-The reference implementation runs three coverage-guided fuzz targets on every change: `frame_decode` (§6: total and canonical decoding), `fsm_sequence` (§2, §3, §7.5, §9: invariants under arbitrary record streams, with authentication stubbed out so the search reaches the state machine), and `auth_forgery` (§7: no frame the fuzzer builds is admitted under a real key). Each runs for 60 seconds in continuous integration — a regression net rather than a search. Fuzzing complements the proofs of §13; it does not replace them.
+The reference implementation runs three coverage-guided fuzz targets on every change: `frame_decode` (§6: total and canonical decoding), `fsm_sequence` (§2, §3, §7.5, §9: invariants under arbitrary record streams, with authentication stubbed out so the search reaches the state machine), and `auth_forgery` (§7: no frame the fuzzer builds is admitted under a key whose secret no one holds, so that any admission would be a genuine forgery). Each runs for 60 seconds in continuous integration — a regression net rather than a search. Fuzzing complements the proofs of §13; it does not replace them.
 
 ---
 

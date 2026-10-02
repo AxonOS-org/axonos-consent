@@ -4,6 +4,26 @@ All notable changes to `axonos-consent` are documented here. Format based on [Ke
 
 ---
 
+## [0.9.2] — 2026-10-02
+
+### Fixed
+
+- **The `auth_forgery` fuzz target reported a forgery that was not one.** It
+  verified frames under the RFC 8032 TEST 1 key, and its seed corpus held
+  conformance vector 13: a genuine TEST 1 signature with one bit flipped. In
+  0.9.1's CI run libFuzzer flipped the bit back in under half a minute and
+  presented vector 01 — genuine, valid, and indistinguishable to the oracle from
+  a forgery. The crate behaved correctly; the oracle was satisfiable without
+  forging anything. The target now verifies under a key whose secret no one
+  holds: a point derived from SHA-512 of a fixed label and multiplied by the
+  cofactor. No genuine signature under it exists, so an admitted frame could
+  only be a forgery. `tools/check.py` repeats the derivation on every change,
+  with its curve arithmetic self-tested against the base point and RFC 8032,
+  and a test checks that the reference verifier accepts the key as a trust
+  anchor while refusing every conformance vector under it.
+
+The crate is unchanged: `src/` is byte-identical to 0.9.1.
+
 ## [0.9.1] — 2026-10-02
 
 ### Fixed

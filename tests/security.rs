@@ -200,6 +200,33 @@ fn a_small_order_key_is_refused_as_a_trust_anchor() {
     ));
 }
 
+/// The key the `auth_forgery` fuzz target verifies against: a prime-order
+/// point no one holds the secret for, derived in `tools/check.py`. It must be
+/// a valid trust anchor, and every conformance vector must fail under it.
+const KEY_NO_ONE_HOLDS: [u8; 32] = [
+    0xfa, 0x17, 0x7b, 0x04, 0x7e, 0xb2, 0x21, 0x8c, 0x9e, 0x5c, 0xec, 0x64, 0x30, 0x44, 0x48, 0x37,
+    0x19, 0xb0, 0xbe, 0x8f, 0xd5, 0xc7, 0xe3, 0xe3, 0x9b, 0x89, 0x6c, 0xbc, 0x43, 0x5d, 0x38, 0x79,
+];
+
+#[test]
+fn the_forgery_fuzzer_key_is_a_trust_anchor_no_vector_satisfies() {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("vectors");
+    for entry in std::fs::read_dir(dir).expect("vectors/").flatten() {
+        if entry.path().extension().and_then(|e| e.to_str()) != Some("bin") {
+            continue;
+        }
+        let frame = std::fs::read(entry.path()).expect("frame");
+        let mut m = ConsentMachine::new(MANIFEST, KEY_NO_ONE_HOLDS, Ed25519Strict)
+            .expect("a prime-order point is a valid trust anchor");
+        assert!(
+            m.handle(&frame).is_err(),
+            "{:?} admitted",
+            entry.file_name()
+        );
+        unchanged(&m, ConsentState::Granted, 0);
+    }
+}
+
 #[test]
 fn withdrawal_stops_publication_before_it_returns() {
     let mut m = machine();
